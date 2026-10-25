@@ -10,7 +10,7 @@ def test_research_agent_uses_existing_sources_and_returns_supplier_search_links(
     })
     monkeypatch.setattr(agent_research, "search_youtube_videos", lambda query, max_results, region_code: {
         "source": "YouTube Data API v3",
-        "items": [{"title": "Portable blender review", "views": 150000, "url": "https://youtube.com/watch?v=example"}],
+        "items": [{"title": "Portable blender review", "views": 150000, "url": "https://youtube.com/watch?v=example", "relevance_score": 100, "relevance_label": "HIGH"}],
     })
     monkeypatch.setattr(agent_research, "_llm_review", lambda *args: {
         "available": False, "provider": None, "summary": None, "strengths": [], "risks": [],
@@ -24,6 +24,8 @@ def test_research_agent_uses_existing_sources_and_returns_supplier_search_links(
 
     assert result["decision"] == "PROMISING SIGNAL"
     assert result["financials"]["estimated_profit"] == 500
+    assert result["youtube"]["relevant_count"] == 1
+    assert result["youtube"]["relevance_summary"]["high"] == 1
     assert len(result["plan"]) == 4
     assert "alibaba.com" in result["supplier_search_links"][0]["url"]
     assert "not scraped or verified" in result["supplier_search_links"][0]["status"]
@@ -47,3 +49,31 @@ def test_research_agent_does_not_call_missing_data_promising(monkeypatch):
     assert result["decision"] == "NEEDS MORE RESEARCH"
     assert result["financials"]["estimated_profit"] is None
     assert result["evidence_gaps"]
+
+
+
+def test_low_relevance_video_does_not_drive_top_view_signal(monkeypatch):
+    import agent_research
+
+    monkeypatch.setattr(agent_research, "fetch_google_trends", lambda keywords, geo="IN": {
+        "source": "Google Trends",
+        "items": [{"keyword": "portable blender", "latest_interest": 60}],
+    })
+    monkeypatch.setattr(agent_research, "search_youtube_videos", lambda query, max_results, region_code: {
+        "source": "YouTube Data API v3",
+        "items": [
+            {"title": "Portable blender review", "views": 120000, "relevance_score": 90, "relevance_label": "HIGH"},
+            {"title": "Unrelated viral video", "views": 900000000, "relevance_score": 0, "relevance_label": "LOW"},
+        ],
+    })
+    monkeypatch.setattr(agent_research, "_llm_review", lambda *args: {
+        "available": False, "provider": None, "summary": None, "strengths": [], "risks": [],
+        "next_steps": [], "evidence_gaps": [], "note": "fallback",
+    })
+
+    result = run_product_research_agent("portable blender")
+
+    assert result["youtube"]["top_video_views"] == 120000
+    assert result["youtube"]["relevant_count"] == 1
+    assert result["youtube"]["relevance_summary"]["low"] == 1
+    assert len(result["youtube"]["items"]) == 2

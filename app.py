@@ -237,6 +237,8 @@ with tab_youtube:
                     "views": st.column_config.NumberColumn("Views", format="%d"),
                     "likes": st.column_config.NumberColumn("Likes", format="%d"),
                     "comments": st.column_config.NumberColumn("Comments", format="%d"),
+                    "relevance_score": st.column_config.NumberColumn("Relevance score", format="%d"),
+                    "relevance_label": st.column_config.TextColumn("Relevance"),
                 },
             )
             st.download_button(
@@ -809,7 +811,18 @@ with tab_agent:
             for gap in gaps:
                 st.write(f"- {gap}")
 
-        videos = agent_result.get("youtube", {}).get("items", [])
+        youtube_result = agent_result.get("youtube", {})
+        relevance_summary = youtube_result.get("relevance_summary", {})
+        if relevance_summary.get("scored"):
+            st.markdown("### YouTube relevance check")
+            r1, r2, r3, r4 = st.columns(4)
+            r1.metric("High relevance", relevance_summary.get("high", 0))
+            r2.metric("Medium relevance", relevance_summary.get("medium", 0))
+            r3.metric("Low relevance", relevance_summary.get("low", 0))
+            r4.metric("Relevant videos used for view signals", youtube_result.get("relevant_count", 0))
+            st.caption("Labels use keyword overlap in titles and descriptions. This is a heuristic, not semantic understanding; inspect videos manually.")
+
+        videos = youtube_result.get("items", [])
         if videos:
             st.markdown("### YouTube evidence")
             video_df = pd.DataFrame(videos)
