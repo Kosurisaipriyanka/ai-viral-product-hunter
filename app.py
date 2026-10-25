@@ -180,5 +180,60 @@ with tab_score:
         st.caption(method.get("limits", ""))
         st.caption(method.get("warning", ""))
 
+with tab_youtube:
+    st.subheader("YouTube product discovery")
+    st.write("Search public YouTube video metadata for product ideas, demonstrations, reviews, and problem-solving gadgets.")
+    st.caption("Uses the official YouTube Data API. View counts can show content attention, but they do not prove product sales or demand.")
+    with st.form("youtube_search_form"):
+        youtube_query = st.text_input("Product or problem keyword", value="TikTok made me buy it gadgets", max_chars=100)
+        youtube_region = st.selectbox("Video region", ["US", "IN", "GB", "CA", "AU"], index=0)
+        youtube_limit = st.slider("Maximum videos", min_value=1, max_value=25, value=10)
+        youtube_clicked = st.form_submit_button("Search YouTube", type="primary")
+
+    if youtube_clicked:
+        if not youtube_query.strip():
+            st.error("Enter a keyword to search.")
+        else:
+            try:
+                response = requests.get(
+                    f"{API_URL}/youtube/search",
+                    params={"query": youtube_query.strip(), "max_results": youtube_limit, "region_code": youtube_region},
+                    timeout=45,
+                )
+                response.raise_for_status()
+                st.session_state["youtube_result"] = response.json()
+            except requests.RequestException:
+                st.session_state["youtube_result"] = None
+                st.error("Could not reach the YouTube search API. Check that the backend is running.")
+
+    youtube_result = st.session_state.get("youtube_result")
+    if youtube_result:
+        if youtube_result.get("error"):
+            st.error(youtube_result["error"])
+        elif youtube_result.get("items"):
+            youtube_df = pd.DataFrame(youtube_result["items"])
+            st.write(f"Found {youtube_result['count']} video(s) for **{youtube_result['query']}**.")
+            st.dataframe(
+                youtube_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "url": st.column_config.LinkColumn("YouTube link"),
+                    "thumbnail": st.column_config.ImageColumn("Thumbnail"),
+                    "views": st.column_config.NumberColumn("Views", format="%d"),
+                    "likes": st.column_config.NumberColumn("Likes", format="%d"),
+                    "comments": st.column_config.NumberColumn("Comments", format="%d"),
+                },
+            )
+            st.download_button(
+                "Download YouTube results as CSV",
+                data=youtube_df.to_csv(index=False).encode("utf-8"),
+                file_name="youtube_product_discovery.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No videos returned. Try a broader keyword.")
+        st.caption(youtube_result.get("note", ""))
+
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
