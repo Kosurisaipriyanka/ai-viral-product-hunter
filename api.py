@@ -1,7 +1,9 @@
-"""FastAPI backend for the AI Viral Product Hunter sample-data phase."""
-from fastapi import FastAPI
+"""FastAPI backend for sample products and optional live discovery signals."""
+from fastapi import FastAPI, Query
 
-app = FastAPI(title="AI Viral Product Hunter API", version="0.1.0")
+from discovery import fetch_google_trends
+
+app = FastAPI(title="AI Viral Product Hunter API", version="0.2.0")
 
 SAMPLE_PRODUCTS = [
     {"name": "Reusable Pet Hair Remover", "category": "Pet Gadgets", "viral_score": 82, "estimated_retail_price_inr": 599, "estimated_supplier_cost_inr": 180, "source": "Sample data", "notes": "Easy-to-demonstrate household pet accessory"},
@@ -25,3 +27,12 @@ def get_products(category: str | None = None):
         product for product in SAMPLE_PRODUCTS if product["category"].casefold() == category.casefold()
     ]
     return {"mode": "sample_data", "count": len(products), "products": products}
+
+@app.get("/trends")
+def get_trends(
+    keywords: str = Query(default="pet gadgets,home organization,travel accessories"),
+    geo: str = Query(default="IN", min_length=2, max_length=2),
+):
+    """Return Google Trends interest signals for comma-separated keywords."""
+    keyword_list = [keyword.strip() for keyword in keywords.split(",")]
+    return fetch_google_trends(keyword_list, geo=geo.upper())
