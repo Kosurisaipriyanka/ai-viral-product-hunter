@@ -89,3 +89,53 @@ def youtube_shortlist(
         "warning": "This is a first-pass keyword screen, not an AI judgment or a prediction of sales or virality. Video metadata may not describe the product accurately.",
     }
     return response
+
+@app.get("/research/report")
+def research_report(
+    query: str = Query(default="portable blender", min_length=1, max_length=100),
+    region_code: str = Query(default="IN", min_length=2, max_length=2),
+    max_results: int = Query(default=10, ge=1, le=25),
+):
+    """Combine YouTube attention and Google Trends interest for one product keyword."""
+    cleaned_query = query.strip()
+    trends = fetch_google_trends([cleaned_query], geo=region_code.upper())
+    videos = search_youtube_videos(query=cleaned_query, max_results=max_results, region_code=region_code.upper())
+    trend_item = next((item for item in trends.get("items", []) if item.get("keyword", "").casefold() == cleaned_query.casefold()), None)
+    video_items = videos.get("items", [])
+    views = [item.get("views") for item in video_items if isinstance(item.get("views"), (int, float))]
+    likes = [item.get("likes") for item in video_items if isinstance(item.get("likes"), (int, float))]
+    comments = [item.get("comments") for item in video_items if isinstance(item.get("comments"), (int, float))]
+    max_views = max(views) if views else None
+    # Log scale keeps one extremely popular video from overwhelming the report.
+    import math
+    view_signal = round(min(100, (math.log10(max_views + 1) / 9) * 100), 1) if max_views is not None else None
+    trend_signal = trend_item.get("latest_interest") if trend_item else None
+    trend_change = trend_item.get("change_percent") if trend_item else None
+    combined_score = None
+    if trend_signal is not None and view_signal is not None:
+        combined_score = round(0.6 * float(trend_signal) + 0.4 * view_signal, 1)
+    return {
+        "query": cleaned_query,
+        "region_code": region_code.upper(),
+        "source": "YouTube Data API v3 + Google Trends",
+        "trend": trend_item,
+        "youtube": {
+            "video_count": len(video_items),
+            "videos_with_view_counts": len(views),
+            "top_video_views": max_views,
+            "average_views": round(sum(views) / len(views)) if views else None,
+            "total_available_likes": sum(likes) if likes else None,
+            "total_available_comments": sum(comments) if comments else None,
+            "view_attention_signal": view_signal,
+            "items": video_items,
+            "error": videos.get("error"),
+        },
+        "combined_research_score": combined_score,
+        "score_method": "60% latest Google Trends indexed interest + 40% log-scaled highest view count signal, only when both sources return usable data.",
+        "warnings": [
+            "Experimental research score only; it is not a prediction of sales, profit, or virality.",
+            "YouTube view counts measure video attention, not product purchases. Google Trends values are indexed interest, not search counts.",
+            "Google Trends uses an unofficial pytrends interface and may be rate-limited.",
+            "Missing data is left unavailable rather than fabricated."
+        ],
+    }
