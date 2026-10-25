@@ -9,8 +9,8 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery"]
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist"]
 )
 
 with tab_demo:
@@ -234,6 +234,63 @@ with tab_youtube:
         else:
             st.info("No videos returned. Try a broader keyword.")
         st.caption(youtube_result.get("note", ""))
+
+with tab_shortlist:
+    st.subheader("First-pass product shortlist")
+    st.write("Search YouTube and rank videos using visible keyword signals inspired by your product research criteria.")
+    st.warning("This is a transparent keyword screen, not an AI verdict or a prediction of sales. It cannot verify supplier prices, shipping, competition, or actual demand.")
+    with st.form("shortlist_form"):
+        shortlist_query = st.text_input("Product or problem keyword", value="useful home gadgets", max_chars=100)
+        shortlist_region = st.selectbox("Video region", ["US", "IN", "GB", "CA", "AU"], index=0, key="shortlist_region")
+        shortlist_limit = st.slider("Maximum videos to screen", min_value=1, max_value=25, value=10, key="shortlist_limit")
+        shortlist_clicked = st.form_submit_button("Build Product Shortlist", type="primary")
+
+    if shortlist_clicked:
+        if not shortlist_query.strip():
+            st.error("Enter a keyword to search.")
+        else:
+            try:
+                response = requests.get(
+                    f"{API_URL}/youtube/shortlist",
+                    params={"query": shortlist_query.strip(), "max_results": shortlist_limit, "region_code": shortlist_region},
+                    timeout=45,
+                )
+                response.raise_for_status()
+                st.session_state["shortlist_result"] = response.json()
+            except requests.RequestException:
+                st.session_state["shortlist_result"] = None
+                st.error("Could not reach the shortlist API. Check that the backend is running.")
+
+    shortlist_result = st.session_state.get("shortlist_result")
+    if shortlist_result:
+        if shortlist_result.get("error"):
+            st.error(shortlist_result["error"])
+        elif shortlist_result.get("items"):
+            shortlist_df = pd.DataFrame(shortlist_result["items"])
+            st.dataframe(
+                shortlist_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "url": st.column_config.LinkColumn("YouTube link"),
+                    "thumbnail": st.column_config.ImageColumn("Thumbnail"),
+                    "views": st.column_config.NumberColumn("Views", format="%d"),
+                    "likes": st.column_config.NumberColumn("Likes", format="%d"),
+                    "comments": st.column_config.NumberColumn("Comments", format="%d"),
+                },
+            )
+            st.download_button(
+                "Download product shortlist as CSV",
+                data=shortlist_df.to_csv(index=False).encode("utf-8"),
+                file_name="product_shortlist_first_pass.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No videos returned. Try a broader keyword.")
+        method = shortlist_result.get("screening_method", {})
+        st.caption(f"Screening method: {method.get('formula', 'Not available')}")
+        st.caption(method.get("warning", ""))
+        st.caption(shortlist_result.get("note", ""))
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
