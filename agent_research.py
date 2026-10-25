@@ -8,6 +8,9 @@ import os
 from urllib.parse import quote_plus
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from discovery import fetch_google_trends
 from youtube_discovery import search_youtube_videos
