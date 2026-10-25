@@ -24,6 +24,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Supplier comparison",
         "Product research report",
         "Research Agent",
+        "Product comparison",
     ]
 )
 
