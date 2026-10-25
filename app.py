@@ -3,6 +3,10 @@ import pandas as pd
 import requests
 import streamlit as st
 import os
+import socket
+import threading
+import time
+import uvicorn
 
 from product_decisions import recommend_product, rank_product_comparisons
 from automated_discovery import discover_candidates, NICHE_CANDIDATES
@@ -13,6 +17,36 @@ from marketplace_evidence import save_marketplace_evidence, list_marketplace_evi
 from competitor_analysis import summarize_competitor_prices, estimate_competitor_margin
 
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
+
+@st.cache_resource
+def start_embedded_api():
+    """Run the FastAPI backend alongside Streamlit when no external API_URL is configured."""
+    if os.getenv("API_URL"):
+        return None
+    from api import app as api_app
+
+    config = uvicorn.Config(
+        api_app,
+        host="127.0.0.1",
+        port=8000,
+        log_level="error",
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True, name="embedded-fastapi")
+    thread.start()
+
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if server.started:
+            return server
+        if not thread.is_alive():
+            raise RuntimeError("The embedded FastAPI backend stopped during startup.")
+        time.sleep(0.1)
+    raise RuntimeError("The embedded FastAPI backend did not start within 15 seconds.")
+
+if not os.getenv("API_URL"):
+    start_embedded_api()
 
 st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layout="wide")
 st.title("🔎 AI Viral Product Hunter")
