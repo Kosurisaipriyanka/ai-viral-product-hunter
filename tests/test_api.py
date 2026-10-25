@@ -56,7 +56,8 @@ def test_score_trend_items_calculates_bounded_score():
         "previous_interest": 40,
         "change_percent": 25.0,
     }])[0]
-    assert result["opportunity_score"] == 72.5
+    # Momentum=(25+100)/2=62.5; score=70%*50 + 30%*62.5 = 53.75.
+    assert result["opportunity_score"] == 53.8
     assert result["score_status"] == "experimental trend-only heuristic"
 
 
@@ -87,5 +88,6 @@ def test_opportunities_endpoint_scores_returned_trend_items(monkeypatch):
     response = client.get("/opportunities", params={"keywords": "home organization"})
     assert response.status_code == 200
     body = response.json()
-    assert body["items"][0]["opportunity_score"] == 71.0
+    # Momentum=(20+100)/2=60; both latest and momentum components equal 60.
+    assert body["items"][0]["opportunity_score"] == 60.0
     assert "not a prediction" in body["score_method"]["warning"]
