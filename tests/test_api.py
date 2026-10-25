@@ -91,3 +91,19 @@ def test_opportunities_endpoint_scores_returned_trend_items(monkeypatch):
     # Momentum=(20+100)/2=60; both latest and momentum components equal 60.
     assert body["items"][0]["opportunity_score"] == 60.0
     assert "not a prediction" in body["score_method"]["warning"]
+
+
+
+def test_youtube_search_requires_local_api_key(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_API_KEY", "")
+    response = client.get("/youtube/search", params={"query": "portable blender"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "YouTube Data API v3"
+    assert body["items"] == []
+    assert "YOUTUBE_API_KEY" in body["error"]
+
+
+def test_youtube_search_rejects_empty_query():
+    response = client.get("/youtube/search", params={"query": ""})
+    assert response.status_code == 422
