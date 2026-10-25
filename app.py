@@ -9,8 +9,8 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends"]
+tab_demo, tab_catalog, tab_trends, tab_score = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score"]
 )
 
 with tab_demo:
@@ -132,6 +132,53 @@ with tab_trends:
         else:
             st.info("No trend data returned. Try fewer or different keywords.")
         st.caption(trends_result.get("note", ""))
+
+with tab_score:
+    st.subheader("Experimental product opportunity score")
+    st.warning("This heuristic uses Google Trends only. It does not include real product sales, competition, margins, or supplier reliability, and it does not predict virality.")
+    with st.form("opportunity_form"):
+        score_keywords = st.text_input(
+            "Keywords separated by commas",
+            value="pet gadgets,home organization,travel accessories",
+            max_chars=300,
+        )
+        score_clicked = st.form_submit_button("Calculate Opportunity Scores", type="primary")
+
+    if score_clicked:
+        if not score_keywords.strip():
+            st.error("Enter at least one keyword.")
+        else:
+            try:
+                response = requests.get(
+                    f"{API_URL}/opportunities",
+                    params={"keywords": score_keywords, "geo": "IN"},
+                    timeout=35,
+                )
+                response.raise_for_status()
+                st.session_state["opportunity_result"] = response.json()
+            except requests.RequestException:
+                st.session_state["opportunity_result"] = None
+                st.error("Could not calculate scores. Check the backend and try again.")
+
+    opportunity_result = st.session_state.get("opportunity_result")
+    if opportunity_result:
+        if opportunity_result.get("error"):
+            st.error(f"Google Trends request failed: {opportunity_result['error']}")
+        elif opportunity_result.get("items"):
+            score_df = pd.DataFrame(opportunity_result["items"])
+            st.dataframe(score_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download opportunity scores as CSV",
+                data=score_df.to_csv(index=False).encode("utf-8"),
+                file_name="experimental_opportunity_scores.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No scoreable trend data returned. Try different keywords.")
+        method = opportunity_result.get("score_method", {})
+        st.caption(f"Formula: {method.get('formula', 'Not available')}")
+        st.caption(method.get("limits", ""))
+        st.caption(method.get("warning", ""))
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
