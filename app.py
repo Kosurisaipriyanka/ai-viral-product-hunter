@@ -9,7 +9,9 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog = st.tabs(["Sample candidates", "Public demo catalog"])
+tab_demo, tab_catalog, tab_trends = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends"]
+)
 
 with tab_demo:
     st.subheader("Sample product candidates")
@@ -62,8 +64,7 @@ with tab_catalog:
                     timeout=15,
                 )
                 response.raise_for_status()
-                result = response.json()
-                st.session_state["catalog_result"] = result
+                st.session_state["catalog_result"] = response.json()
             except requests.RequestException:
                 st.session_state["catalog_result"] = None
                 st.error("Could not reach the catalog API. Check that the backend is running.")
@@ -86,6 +87,51 @@ with tab_catalog:
         else:
             st.info("No matching products in this demo catalog. Try a broader keyword such as 'phone', 'beauty', or 'kitchen'.")
         st.caption(catalog_result.get("note", ""))
+
+with tab_trends:
+    st.subheader("Google Trends interest")
+    st.write("Compare relative search interest in India over the past three months.")
+    st.caption("Interest is indexed from 0 to 100. It is not sales volume or proof that a product will go viral.")
+    with st.form("trends_form"):
+        keywords_text = st.text_input(
+            "Keywords separated by commas",
+            value="pet gadgets,home organization,travel accessories",
+            max_chars=300,
+        )
+        trends_clicked = st.form_submit_button("Fetch Google Trends", type="primary")
+
+    if trends_clicked:
+        if not keywords_text.strip():
+            st.error("Enter at least one keyword.")
+        else:
+            try:
+                response = requests.get(
+                    f"{API_URL}/trends",
+                    params={"keywords": keywords_text, "geo": "IN"},
+                    timeout=35,
+                )
+                response.raise_for_status()
+                st.session_state["trends_result"] = response.json()
+            except requests.RequestException:
+                st.session_state["trends_result"] = None
+                st.error("Could not fetch Google Trends. Check the backend and try again.")
+
+    trends_result = st.session_state.get("trends_result")
+    if trends_result:
+        if trends_result.get("error"):
+            st.error(f"Google Trends request failed: {trends_result['error']}")
+        elif trends_result.get("items"):
+            trends_df = pd.DataFrame(trends_result["items"])
+            st.dataframe(trends_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download Trends results as CSV",
+                data=trends_df.to_csv(index=False).encode("utf-8"),
+                file_name="google_trends_interest.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No trend data returned. Try fewer or different keywords.")
+        st.caption(trends_result.get("note", ""))
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
