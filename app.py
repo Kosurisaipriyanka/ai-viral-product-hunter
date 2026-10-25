@@ -8,6 +8,7 @@ from automated_discovery import discover_candidates, NICHE_CANDIDATES
 from research_history import save_research_run, list_research_runs, delete_research_run, clear_research_history
 from research_exports import create_excel_report, create_pdf_report
 from marketplace_research import build_marketplace_search_links
+from marketplace_evidence import save_marketplace_evidence, list_marketplace_evidence, delete_marketplace_evidence
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -1216,7 +1217,7 @@ with tab_marketplaces:
             elif not listing_url.strip().startswith(("https://", "http://")):
                 st.error("The listing URL must start with http:// or https://.")
             else:
-                st.session_state["marketplace_evidence_rows"].append({
+                evidence_item = {
                     "product_keyword": saved_query,
                     "source": listing_source,
                     "listing_title": listing_title.strip(),
@@ -1226,12 +1227,22 @@ with tab_marketplaces:
                     "shipping_cost_inr": shipping,
                     "manually_checked": verified,
                     "evidence_notes": notes.strip(),
-                })
-                st.success("Added to this session's worksheet. Download it to keep a copy.")
-        evidence_rows = st.session_state.get("marketplace_evidence_rows", [])
+                }
+                try:
+                    evidence_id = save_marketplace_evidence(evidence_item)
+                    st.success(f"Evidence saved locally (ID {evidence_id}).")
+                except (ValueError, OSError) as exc:
+                    st.error(f"Could not save evidence: {exc}")
+        evidence_rows = list_marketplace_evidence()
         if evidence_rows:
+            st.caption("Saved evidence persists in the local SQLite database on this computer.")
             evidence_df = pd.DataFrame(evidence_rows)
             st.dataframe(evidence_df, hide_index=True, width="stretch")
+            selected_evidence_id = st.selectbox("Saved evidence ID to delete", options=[row["id"] for row in evidence_rows], key="marketplace_evidence_delete_id")
+            if st.button("Delete selected evidence", key="delete_marketplace_evidence"):
+                delete_marketplace_evidence(selected_evidence_id)
+                st.success("Saved evidence deleted.")
+                st.rerun()
             st.download_button(
                 "Download marketplace evidence worksheet (CSV)",
                 data=evidence_df.to_csv(index=False).encode("utf-8"),
