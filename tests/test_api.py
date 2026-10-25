@@ -40,3 +40,8 @@ def test_trends_endpoint_handles_empty_keywords_without_network_call():
     body = response.json()
     assert body["source"] == "Google Trends"
     assert body["items"] == []
+
+
+def test_catalog_endpoint_rejects_empty_query():
+    response = client.get("/catalog", params={"query": ""})
+    assert response.status_code == 422
