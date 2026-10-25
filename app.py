@@ -7,6 +7,7 @@ from product_decisions import recommend_product, rank_product_comparisons
 from automated_discovery import discover_candidates, NICHE_CANDIDATES
 from research_history import save_research_run, list_research_runs, delete_research_run, clear_research_history
 from research_exports import create_excel_report, create_pdf_report
+from marketplace_research import build_marketplace_search_links
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -14,7 +15,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation, tab_marketplaces = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -32,6 +33,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Research history",
         "Export reports",
         "Profitability & validation",
+        "Marketplace research",
     ]
 )
 
@@ -1175,3 +1177,66 @@ with tab_exports:
                 )
             except Exception:
                 st.error("PDF report could not be generated. Check that report dependencies are installed.")
+
+
+with tab_marketplaces:
+    st.subheader("Marketplace & supplier research")
+    st.write("Open current search results on external sites, compare listings, and record evidence before choosing a product.")
+    st.warning("These links open external searches. This app does not scrape or verify listing prices, stock, sales, or supplier reliability.")
+    with st.form("marketplace_research_form"):
+        marketplace_query = st.text_input("Product keyword", value="portable blender", max_chars=120)
+        generate_marketplace_links = st.form_submit_button("Generate research links", type="primary")
+    if generate_marketplace_links:
+        if not marketplace_query.strip():
+            st.error("Enter a product keyword.")
+        else:
+            st.session_state["marketplace_research_query"] = marketplace_query.strip()
+    saved_query = st.session_state.get("marketplace_research_query", "")
+    if saved_query:
+        links = build_marketplace_search_links(saved_query)
+        st.markdown("### Search current listings")
+        for item in links:
+            st.markdown(f"- [{item['source']}]({item['search_url']})")
+        st.markdown("### Record one listing you manually checked")
+        with st.form("manual_marketplace_evidence_form"):
+            listing_source = st.selectbox("Source checked", options=[item["source"] for item in links])
+            listing_title = st.text_input("Listing/product title", max_chars=200)
+            listing_url = st.text_input("Exact listing URL", placeholder="https://...")
+            listed_price = st.number_input("Listed price (₹)", min_value=0.0, value=0.0, step=50.0)
+            supplier_cost = st.number_input("Quoted supplier cost (₹)", min_value=0.0, value=0.0, step=50.0)
+            shipping = st.number_input("Quoted shipping cost (₹)", min_value=0.0, value=0.0, step=10.0)
+            verified = st.checkbox("I manually opened this listing and checked the current details")
+            notes = st.text_area("Evidence notes / caveats", max_chars=1000)
+            save_evidence = st.form_submit_button("Add to evidence worksheet")
+        if "marketplace_evidence_rows" not in st.session_state:
+            st.session_state["marketplace_evidence_rows"] = []
+        if save_evidence:
+            if not listing_title.strip() or not listing_url.strip():
+                st.error("Enter both a listing title and the exact listing URL.")
+            elif not listing_url.strip().startswith(("https://", "http://")):
+                st.error("The listing URL must start with http:// or https://.")
+            else:
+                st.session_state["marketplace_evidence_rows"].append({
+                    "product_keyword": saved_query,
+                    "source": listing_source,
+                    "listing_title": listing_title.strip(),
+                    "listing_url": listing_url.strip(),
+                    "listed_price_inr": listed_price,
+                    "supplier_cost_inr": supplier_cost,
+                    "shipping_cost_inr": shipping,
+                    "manually_checked": verified,
+                    "evidence_notes": notes.strip(),
+                })
+                st.success("Added to this session's worksheet. Download it to keep a copy.")
+        evidence_rows = st.session_state.get("marketplace_evidence_rows", [])
+        if evidence_rows:
+            evidence_df = pd.DataFrame(evidence_rows)
+            st.dataframe(evidence_df, hide_index=True, width="stretch")
+            st.download_button(
+                "Download marketplace evidence worksheet (CSV)",
+                data=evidence_df.to_csv(index=False).encode("utf-8"),
+                file_name="marketplace_evidence_worksheet.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("No listings recorded yet. Open a search link, inspect a listing, and record only details you verified.")
