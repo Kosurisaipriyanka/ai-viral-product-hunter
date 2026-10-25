@@ -11,7 +11,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -23,6 +23,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Profit calculator",
         "Supplier comparison",
         "Product research report",
+        "Research Agent",
     ]
 )
 
@@ -706,3 +707,131 @@ with tab_research_export:
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
+
+with tab_agent:
+    st.subheader("Guided AI Product Research Agent")
+    st.write(
+        "Run a planned research workflow across Google Trends and YouTube, calculate an estimate from your own cost inputs, "
+        "review missing evidence, and open supplier marketplace search links."
+    )
+    st.info(
+        "This is a guided multi-tool workflow. Optional LLM review requires an OpenAI-compatible API key. "
+        "Supplier pages are search links only—not scraped or verified supplier offers."
+    )
+    with st.form("agent_research_form"):
+        agent_query = st.text_input("Product keyword", value="portable blender", max_chars=100)
+        agent_region = st.selectbox("Market", ["IN", "US", "GB", "CA", "AU"], index=0, key="agent_region")
+        agent_limit = st.slider("YouTube videos to inspect", min_value=1, max_value=25, value=10, key="agent_limit")
+        st.markdown("**Optional cost estimate**")
+        cost_col1, cost_col2 = st.columns(2)
+        with cost_col1:
+            agent_selling_price = st.number_input("Expected selling price", min_value=0.0, value=0.0, step=50.0)
+            agent_supplier_cost = st.number_input("Supplier item cost", min_value=0.0, value=0.0, step=25.0)
+        with cost_col2:
+            agent_shipping_cost = st.number_input("Shipping per unit", min_value=0.0, value=0.0, step=10.0)
+            agent_other_costs = st.number_input("Other costs per order", min_value=0.0, value=0.0, step=10.0)
+        agent_supplier_notes = st.text_input(
+            "Supplier notes (only after you manually check a listing)",
+            value="",
+            max_chars=500,
+            help="For example: supplier name, product match, shipping estimate, and listing URL. Do not paste secrets.",
+        )
+        agent_clicked = st.form_submit_button("Run Research Workflow", type="primary")
+
+    if agent_clicked:
+        if not agent_query.strip():
+            st.error("Enter a product keyword.")
+        else:
+            try:
+                agent_response = requests.get(
+                    f"{API_URL}/agent/research",
+                    params={
+                        "query": agent_query.strip(),
+                        "region_code": agent_region,
+                        "max_results": agent_limit,
+                        "selling_price": agent_selling_price,
+                        "supplier_cost": agent_supplier_cost,
+                        "shipping_cost": agent_shipping_cost,
+                        "other_costs": agent_other_costs,
+                        "supplier_notes": agent_supplier_notes,
+                    },
+                    timeout=75,
+                )
+                agent_response.raise_for_status()
+                st.session_state["agent_research_result"] = agent_response.json()
+            except requests.RequestException as exc:
+                st.session_state["agent_research_result"] = None
+                st.error("The research workflow could not finish. Check the backend, Google Trends availability, and YouTube API setup.")
+                st.caption(str(exc))
+
+    agent_result = st.session_state.get("agent_research_result")
+    if agent_result:
+        st.markdown("### Workflow plan")
+        st.dataframe(pd.DataFrame(agent_result.get("plan", [])), hide_index=True, width="stretch")
+        decision = agent_result.get("decision", "NEEDS MORE RESEARCH")
+        reasons = agent_result.get("decision_reasons", [])
+        if decision == "PROMISING SIGNAL":
+            st.success(decision + " — " + " ".join(reasons))
+        elif decision == "HIGH RISK":
+            st.error(decision + " — " + " ".join(reasons))
+        else:
+            st.warning(decision + " — " + " ".join(reasons))
+
+        financials = agent_result.get("financials", {})
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Latest Trends interest", (agent_result.get("trend") or {}).get("latest_interest", "Unavailable"))
+        m2.metric("Top YouTube views", f"{agent_result['youtube']['top_video_views']:,}" if agent_result.get("youtube", {}).get("top_video_views") is not None else "Unavailable")
+        m3.metric("Estimated profit", f"₹{financials['estimated_profit']:,.2f}" if financials.get("estimated_profit") is not None else "Enter costs")
+        if financials.get("estimated_margin_percent") is not None:
+            st.caption(f"Estimated margin: {financials['estimated_margin_percent']}% based only on entered costs.")
+
+        ai_review = agent_result.get("ai_review", {})
+        st.markdown("### AI review")
+        if ai_review.get("available"):
+            st.caption(f"LLM provider/model: {ai_review.get('provider')}")
+            st.write(ai_review.get("summary", "No summary returned."))
+        else:
+            st.info(ai_review.get("note", "Optional LLM review is not available; use the rule-based findings and evidence below."))
+        for title, key in [("Strengths", "strengths"), ("Risks", "risks"), ("Suggested next steps", "next_steps"), ("AI evidence gaps", "evidence_gaps")]:
+            values = ai_review.get(key, [])
+            if values:
+                st.markdown(f"**{title}**")
+                for value in values:
+                    st.write(f"- {value}")
+
+        st.markdown("### Supplier search links")
+        for supplier in agent_result.get("supplier_search_links", []):
+            st.markdown(f"- [{supplier['name']}]({supplier['url']}) — {supplier['status']}")
+
+        gaps = agent_result.get("evidence_gaps", [])
+        if gaps:
+            st.markdown("### Evidence still missing")
+            for gap in gaps:
+                st.write(f"- {gap}")
+
+        videos = agent_result.get("youtube", {}).get("items", [])
+        if videos:
+            st.markdown("### YouTube evidence")
+            video_df = pd.DataFrame(videos)
+            st.dataframe(
+                video_df,
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "url": st.column_config.LinkColumn("YouTube link"),
+                    "views": st.column_config.NumberColumn("Views", format="%d"),
+                    "likes": st.column_config.NumberColumn("Likes", format="%d"),
+                    "comments": st.column_config.NumberColumn("Comments", format="%d"),
+                },
+            )
+        with st.expander("Sources and limitations"):
+            st.json({
+                "sources": agent_result.get("sources"),
+                "warnings": agent_result.get("warnings"),
+            })
+        st.download_button(
+            "Download Research Agent result as JSON",
+            data=__import__("json").dumps(agent_result, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name="ai_product_research_agent.json",
+            mime="application/json",
+        )
