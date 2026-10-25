@@ -24,6 +24,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0", "httpx>=0.27,<1.0"]
 
+[tool.setuptools.package-data]
+"*" = ["*.txt"]
+
 [tool.setuptools]
 py-modules = ["api", "app", "discovery", "catalog", "scoring", "youtube_discovery", "product_filter", "product_decisions", "agent_research", "automated_discovery", "research_history", "research_exports", "marketplace_research", "marketplace_evidence", "competitor_analysis"]
 
