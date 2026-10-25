@@ -3,8 +3,9 @@ from fastapi import FastAPI, Query
 
 from catalog import search_public_catalog
 from discovery import fetch_google_trends
+from scoring import score_trend_items
 
-app = FastAPI(title="AI Viral Product Hunter API", version="0.3.0")
+app = FastAPI(title="AI Viral Product Hunter API", version="0.4.0")
 
 SAMPLE_PRODUCTS = [
     {"name": "Reusable Pet Hair Remover", "category": "Pet Gadgets", "viral_score": 82, "estimated_retail_price_inr": 599, "estimated_supplier_cost_inr": 180, "source": "Sample data", "notes": "Easy-to-demonstrate household pet accessory"},
@@ -37,6 +38,23 @@ def get_trends(
     """Return Google Trends interest signals for comma-separated keywords."""
     keyword_list = [keyword.strip() for keyword in keywords.split(",")]
     return fetch_google_trends(keyword_list, geo=geo.upper())
+
+@app.get("/opportunities")
+def get_opportunities(
+    keywords: str = Query(default="pet gadgets,home organization,travel accessories"),
+    geo: str = Query(default="IN", min_length=2, max_length=2),
+):
+    """Return an experimental score derived only from Google Trends signals."""
+    keyword_list = [keyword.strip() for keyword in keywords.split(",")]
+    trends = fetch_google_trends(keyword_list, geo=geo.upper())
+    response = dict(trends)
+    response["items"] = score_trend_items(trends.get("items", []))
+    response["score_method"] = {
+        "formula": "70% latest interest + 30% normalized recent momentum",
+        "limits": "Momentum capped at +/-100%; score unavailable when change cannot be calculated.",
+        "warning": "Experimental trend-only heuristic, not a prediction of sales, profit, or virality.",
+    }
+    return response
 
 @app.get("/catalog")
 def get_catalog(
