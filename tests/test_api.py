@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 
+import api
 from api import app
+from scoring import score_trend_items
 
 client = TestClient(app)
 
@@ -45,3 +47,45 @@ def test_trends_endpoint_handles_empty_keywords_without_network_call():
 def test_catalog_endpoint_rejects_empty_query():
     response = client.get("/catalog", params={"query": ""})
     assert response.status_code == 422
+
+
+def test_score_trend_items_calculates_bounded_score():
+    result = score_trend_items([{
+        "keyword": "travel accessories",
+        "latest_interest": 50,
+        "previous_interest": 40,
+        "change_percent": 25.0,
+    }])[0]
+    assert result["opportunity_score"] == 72.5
+    assert result["score_status"] == "experimental trend-only heuristic"
+
+
+def test_score_is_unavailable_when_momentum_cannot_be_calculated():
+    result = score_trend_items([{
+        "keyword": "pet gadgets",
+        "latest_interest": 0,
+        "previous_interest": 0,
+        "change_percent": None,
+    }])[0]
+    assert result["opportunity_score"] is None
+    assert result["score_status"] == "insufficient trend history"
+
+
+def test_opportunities_endpoint_scores_returned_trend_items(monkeypatch):
+    monkeypatch.setattr(api, "fetch_google_trends", lambda keywords, geo="IN": {
+        "source": "Google Trends",
+        "geo": geo,
+        "items": [{
+            "keyword": "home organization",
+            "latest_interest": 60,
+            "previous_interest": 50,
+            "change_percent": 20.0,
+            "points": 93,
+        }],
+        "note": "test data",
+    })
+    response = client.get("/opportunities", params={"keywords": "home organization"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"][0]["opportunity_score"] == 71.0
+    assert "not a prediction" in body["score_method"]["warning"]
