@@ -539,204 +539,177 @@ with tab_supplier:
                 mime="text/csv",
             )
 
-
 with tab_research_export:
-    st.subheader("Product Research Report")
+    st.subheader("Product Research Report and Decision")
     st.write(
-        "Combine saved Google Trends, YouTube, supplier comparison, "
-        "and profit calculator results into one downloadable report."
+        "Combine saved research signals with supplier and cost estimates. "
+        "The recommendation uses visible rules and is not a prediction of sales or virality."
     )
 
-    # Reuse results already collected in this Streamlit session.
+    # Reuse results already collected in the current Streamlit session.
     trend_result = st.session_state.get("trends_result") or {}
     youtube_result = st.session_state.get("youtube_result") or {}
     supplier_result = st.session_state.get("supplier_comparison_results")
-    profit_result = st.session_state.get("profit_result") or {}
+    saved_profit = st.session_state.get("profit_result") or {}
 
-    # Extract latest available Trends interest.
     trends_interest = None
-    trend_items = trend_result.get("items", [])
+    trend_items = trend_result.get("items", []) if isinstance(trend_result, dict) else []
     if trend_items:
         trend_df = pd.DataFrame(trend_items)
-        possible_columns = [
-            "latest_interest",
-            "latest_value",
-            "current_interest",
-            "interest",
-        ]
-        for column in possible_columns:
+        for column in ("latest_interest", "latest_value", "current_interest", "interest", "latest"):
             if column in trend_df.columns:
-                values = pd.to_numeric(
-                    trend_df[column], errors="coerce"
-                ).dropna()
-                if not values.empty:
-                    trends_interest = float(values.iloc[0])
+                vals = pd.to_numeric(trend_df[column], errors="coerce").dropna()
+                if not vals.empty:
+                    trends_interest = float(vals.max())
+                    break
+        # Some Trends responses contain a date/value series instead of a latest-value field.
+        if trends_interest is None:
+            numeric_cols = [c for c in trend_df.columns if c.lower() in ("value", "interest", "trend_value")]
+            for column in numeric_cols:
+                vals = pd.to_numeric(trend_df[column], errors="coerce").dropna()
+                if not vals.empty:
+                    trends_interest = float(vals.iloc[-1])
                     break
 
-    # Extract the highest view count from YouTube results.
-    youtube_items = youtube_result.get("items", [])
     top_views = None
+    youtube_items = youtube_result.get("items", []) if isinstance(youtube_result, dict) else []
     if youtube_items:
         views = pd.to_numeric(
-            pd.DataFrame(youtube_items).get(
-                "views", pd.Series(dtype=float)
-            ),
+            pd.DataFrame(youtube_items).get("views", pd.Series(dtype=float)),
             errors="coerce",
         ).dropna()
         if not views.empty:
             top_views = int(views.max())
 
-    # Reuse the supplier comparison, if available.
-    supplier_name = None
+    supplier_name = ""
     supplier_cost = None
     supplier_shipping = None
     if isinstance(supplier_result, pd.DataFrame) and not supplier_result.empty:
-        first_supplier = supplier_result.iloc[0]
-        supplier_name = first_supplier.get("Supplier")
-        supplier_cost = first_supplier.get("Item cost (₹)")
-        supplier_shipping = first_supplier.get("Shipping (₹)")
+        best_supplier = supplier_result.iloc[0]
+        supplier_name = str(best_supplier.get("Supplier", ""))
+        supplier_cost = pd.to_numeric(pd.Series([best_supplier.get("Item cost (₹)")]), errors="coerce").iloc[0]
+        supplier_shipping = pd.to_numeric(pd.Series([best_supplier.get("Shipping (₹)")]), errors="coerce").iloc[0]
 
-    # Reuse the profit calculator result, if available.
-    product_default = (
-        profit_result.get("product_name")
-        or "Portable blender"
-    )
-    selling_default = float(
-        profit_result.get("selling_price_inr", 1499.0)
-    )
-
-    st.markdown("**Automatically found session results**")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric(
-        "Trends interest",
-        f"{trends_interest:g}" if trends_interest is not None else "Not found",
-    )
-    c2.metric(
-        "Top YouTube views",
-        f"{top_views:,}" if top_views is not None else "Not found",
-    )
-    c3.metric(
-        "Supplier quote",
-        supplier_name or "Not found",
-    )
+    c1.metric("Saved Trends interest", f"{trends_interest:g}" if trends_interest is not None else "Not found")
+    c2.metric("Top YouTube views", f"{top_views:,}" if top_views is not None else "Not found")
+    c3.metric("Lowest-cost saved supplier", supplier_name or "Not found")
     c4.metric(
-        "Profit estimate",
-        (
-            f"₹{profit_result['estimated_profit_per_order_inr']:,.2f}"
-            if profit_result.get("estimated_profit_per_order_inr") is not None
-            else "Not found"
-        ),
+        "Saved profit estimate",
+        f"₹{saved_profit['estimated_profit_per_order_inr']:,.2f}"
+        if saved_profit.get("estimated_profit_per_order_inr") is not None else "Not found",
+    )
+    st.caption(
+        "Session results may refer to different products or searches. Confirm they match before using them. "
+        "Missing data is not evidence of zero demand."
     )
 
-    st.caption(
-        "These values come from saved results in the current Streamlit session. "
-        "Run the relevant research tabs first. Results may not refer to the same product."
-    )
+    default_product = str(saved_profit.get("product_name") or "Portable blender")
+    default_selling = float(saved_profit.get("selling_price_inr", 1499.0) or 1499.0)
+    default_other_costs = sum(float(saved_profit.get(key, 0) or 0) for key in (
+        "packaging_inr", "platform_fees_inr", "ad_cost_inr", "returns_reserve_inr", "tax_and_other_cost_inr"
+    ))
 
     with st.form("product_research_export_form"):
-        report_product_name = st.text_input(
-            "Product name",
-            value=product_default,
-        )
+        report_product_name = st.text_input("Product name", value=default_product, max_chars=100)
         report_trends_interest = st.number_input(
-            "Google Trends interest (0–100; 0 if unavailable)",
-            min_value=0,
-            max_value=100,
-            value=max(
-                0,
-                min(100, int(trends_interest))
-                if trends_interest is not None else 0,
-            ),
+            "Google Trends interest (0–100; enter 0 if unavailable)", min_value=0, max_value=100,
+            value=max(0, min(100, int(trends_interest))) if trends_interest is not None else 0,
         )
         report_youtube_views = st.number_input(
-            "Top relevant YouTube views (0 if unavailable)",
-            min_value=0,
-            value=top_views or 0,
-            step=1000,
+            "Top relevant YouTube views (enter 0 if unavailable)", min_value=0,
+            value=int(top_views or 0), step=1000,
         )
-        report_supplier_name = st.text_input(
-            "Supplier name",
-            value=str(supplier_name or ""),
-        )
+        report_supplier_name = st.text_input("Supplier name", value=supplier_name, max_chars=100)
         report_supplier_cost = st.number_input(
-            "Supplier item cost (₹)",
-            min_value=0.0,
-            value=float(supplier_cost)
-            if supplier_cost is not None else 0.0,
+            "Supplier item cost per unit (₹)", min_value=0.0,
+            value=float(supplier_cost) if supplier_cost is not None and pd.notna(supplier_cost) else 0.0,
         )
         report_shipping = st.number_input(
-            "Shipping per unit (₹)",
-            min_value=0.0,
-            value=float(supplier_shipping)
-            if supplier_shipping is not None else 0.0,
+            "Shipping per unit (₹)", min_value=0.0,
+            value=float(supplier_shipping) if supplier_shipping is not None and pd.notna(supplier_shipping) else 0.0,
         )
         report_selling_price = st.number_input(
-            "Expected selling price (₹)",
-            min_value=0.0,
-            value=selling_default,
+            "Expected selling price per order (₹)", min_value=0.0, value=default_selling, step=50.0,
         )
         report_other_costs = st.number_input(
-            "Other costs per order (₹)",
-            min_value=0.0,
-            value=max(
-                0.0,
-                float(profit_result.get("platform_fees_inr", 0))
-                + float(profit_result.get("packaging_inr", 0))
-                + float(profit_result.get("ad_cost_inr", 0))
-                + float(profit_result.get("returns_reserve_inr", 0))
-                + float(profit_result.get("tax_and_other_cost_inr", 0)),
-            ),
-            help="Include platform fees, packaging, advertising, returns, taxes, and other costs.",
+            "Other costs per order (₹)", min_value=0.0, value=max(0.0, default_other_costs),
+            help="Include packaging, platform/payment fees, ads, returns/refunds reserve, taxes, and other costs.",
         )
         report_notes = st.text_area(
-            "Research notes",
-            placeholder="Record product quality, competition, supplier links, and verification notes.",
+            "Research notes", placeholder="Add supplier quote links, quality checks, competition notes, and concerns."
         )
-        create_report = st.form_submit_button(
-            "Generate Product Research Report",
-            type="primary",
-        )
+        create_report = st.form_submit_button("Generate Product Research Report", type="primary")
 
     if create_report:
-        total_cost = (
-            report_supplier_cost
-            + report_shipping
-            + report_other_costs
-        )
+        total_cost = report_supplier_cost + report_shipping + report_other_costs
         estimated_profit = report_selling_price - total_cost
-        estimated_margin = (
-            estimated_profit / report_selling_price * 100
-            if report_selling_price > 0 else None
-        )
+        estimated_margin = estimated_profit / report_selling_price * 100 if report_selling_price > 0 else None
+
+        reasons = []
+        if report_selling_price <= 0:
+            decision = "HIGH RISK"
+            reasons.append("Selling price must be greater than zero.")
+        elif estimated_profit < 0:
+            decision = "HIGH RISK"
+            reasons.append("Estimated profit is negative using the entered costs.")
+        else:
+            missing = []
+            if report_supplier_cost <= 0:
+                missing.append("verify supplier item cost")
+            if report_shipping <= 0:
+                missing.append("verify shipping cost (enter 0 only if genuinely free)")
+            if report_trends_interest <= 0:
+                missing.append("collect usable Google Trends data")
+            if report_youtube_views <= 0:
+                missing.append("collect relevant YouTube view data")
+            if not report_supplier_name.strip():
+                missing.append("record and verify the supplier")
+            if estimated_margin is None or estimated_margin < 20:
+                missing.append("review the low or unavailable estimated margin")
+
+            if missing:
+                decision = "NEEDS MORE RESEARCH"
+                reasons.extend("Need to " + item + "." for item in missing)
+            elif report_trends_interest >= 50 and report_youtube_views >= 100000 and estimated_margin >= 30:
+                decision = "PROMISING SIGNAL"
+                reasons.append("Entered Trends, YouTube, and margin values meet the screening thresholds.")
+            else:
+                decision = "NEEDS MORE RESEARCH"
+                reasons.append("The entered metrics do not meet all promising-signal thresholds.")
 
         research_report = pd.DataFrame([{
             "product_name": report_product_name,
             "google_trends_interest_0_100": report_trends_interest,
-            "top_youtube_views": report_youtube_views,
+            "top_relevant_youtube_views": report_youtube_views,
             "supplier_name": report_supplier_name,
             "supplier_item_cost_inr": report_supplier_cost,
             "shipping_per_unit_inr": report_shipping,
-            "selling_price_inr": report_selling_price,
+            "expected_selling_price_inr": report_selling_price,
             "other_costs_per_order_inr": report_other_costs,
             "total_estimated_cost_inr": round(total_cost, 2),
             "estimated_profit_per_order_inr": round(estimated_profit, 2),
-            "estimated_margin_percent": (
-                round(estimated_margin, 2)
-                if estimated_margin is not None else None
-            ),
+            "estimated_margin_percent": round(estimated_margin, 2) if estimated_margin is not None else None,
+            "decision": decision,
+            "decision_reasons": " ".join(reasons),
             "research_notes": report_notes,
-            "data_status": "Mixed saved results and user-entered values; verify before use",
+            "data_status": "Verify product match, source data, supplier quote, and all costs",
         }])
-
         st.session_state["product_research_report"] = research_report
+        st.session_state["product_research_decision"] = decision
+        st.session_state["product_research_decision_reasons"] = reasons
 
     research_report = st.session_state.get("product_research_report")
-    if research_report is not None:
-        st.dataframe(
-            research_report,
-            hide_index=True,
-            width="stretch",
-        )
+    if isinstance(research_report, pd.DataFrame):
+        decision = st.session_state.get("product_research_decision", "NEEDS MORE RESEARCH")
+        reasons = st.session_state.get("product_research_decision_reasons", [])
+        if decision == "PROMISING SIGNAL":
+            st.success("PROMISING SIGNAL — " + " ".join(reasons))
+        elif decision == "HIGH RISK":
+            st.error("HIGH RISK — " + " ".join(reasons))
+        else:
+            st.warning("NEEDS MORE RESEARCH — " + " ".join(reasons))
+        st.dataframe(research_report, hide_index=True, width="stretch")
         st.download_button(
             "Download Product Research Report CSV",
             data=research_report.to_csv(index=False).encode("utf-8"),
@@ -745,9 +718,11 @@ with tab_research_export:
         )
 
     st.caption(
-        "This is a research aid, not a sales or profit prediction. "
-        "Confirm that the Trends, YouTube, and supplier results refer to the same product. "
-        "Zero values may mean data was unavailable, not that demand or cost is zero."
+        "Transparent starter rules: negative estimated profit or invalid selling price = HIGH RISK; "
+        "missing key evidence = NEEDS MORE RESEARCH; PROMISING SIGNAL requires Trends interest ≥ 50, "
+        "YouTube views ≥ 100,000, and estimated margin ≥ 30%. These thresholds are not validated predictors. "
+        "The estimate excludes any costs you did not enter."
     )
 
+st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
