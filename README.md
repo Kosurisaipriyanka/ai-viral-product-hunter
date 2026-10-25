@@ -26,6 +26,10 @@ Features
   user; supplier quotes are not automatically verified.
 - Product research report: combine research inputs, display a
   transparent decision category, and export a CSV report.
+- Guided Research Agent: orchestrate Google Trends and YouTube research,
+  review evidence gaps, estimate entered costs, and provide supplier search links.
+- Optional LLM review: configure an OpenAI-compatible chat-completions API
+  to summarize strengths, risks, evidence gaps, and suggested next steps.
 - Automated tests: test backend endpoints and the product decision
   rules.
 Technology stack
@@ -61,7 +65,7 @@ Create a local .env file if the backend expects it, and set:
 YOUTUBE_API_KEY=your_key_here
 Replace the placeholder with your own key. Never commit .env or
 share your API key. Ensure .env is included in .gitignore.
-4. Start the FastAPI backend
+Optional: enable the LLM review in the Research Agent tab. Add these settings to your local `.env` file (only the API key is required; the other values have defaults):\nAI_MODEL_API_KEY=your_llm_api_key_here\nAI_MODEL_BASE_URL=https://api.openai.com/v1\nAI_MODEL_NAME=gpt-4o-mini\nUse a provider endpoint and model that support the OpenAI-compatible `/chat/completions` format. This feature may incur provider charges. Never commit `.env` or share keys. Without a key, the research workflow still runs with rule-based findings.\n\n4. Start the FastAPI backend
 In the first terminal:
 python -m uvicorn api:app --reload
 The API should be available at http://127.0.0.1:8000. Open
