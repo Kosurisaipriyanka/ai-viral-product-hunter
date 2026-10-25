@@ -9,8 +9,8 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist", "Combined research"]
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist", "Combined research", "Profit calculator"]
 )
 
 with tab_demo:
@@ -365,6 +365,66 @@ with tab_report:
             )
         for warning in combined_report.get("warnings", []):
             st.caption(warning)
+
+with tab_profit:
+    st.subheader("Supplier cost and profit calculator")
+    st.write("Enter prices you have verified from a supplier and your intended selling channel. This is a manual calculator; it does not fetch supplier prices automatically.")
+    st.info("Example values are only placeholders. Replace them with current quotes, shipping, platform fees, taxes, and your own assumptions before making a decision.")
+    with st.form("profit_calculator_form"):
+        product_name = st.text_input("Product name", value="Portable blender", max_chars=100)
+        c1, c2, c3 = st.columns(3)
+        selling_price = c1.number_input("Selling price per order (₹)", min_value=0.0, value=1499.0, step=50.0)
+        supplier_cost = c2.number_input("Supplier item cost (₹)", min_value=0.0, value=450.0, step=25.0)
+        inbound_shipping = c3.number_input("Shipping to you / fulfilment (₹)", min_value=0.0, value=100.0, step=10.0)
+        c4, c5, c6 = st.columns(3)
+        packaging_cost = c4.number_input("Packaging cost (₹)", min_value=0.0, value=30.0, step=5.0)
+        platform_fee_pct = c5.number_input("Platform/payment fees (%)", min_value=0.0, max_value=100.0, value=12.0, step=1.0)
+        ad_cost = c6.number_input("Ad cost per order (₹)", min_value=0.0, value=150.0, step=10.0)
+        c7, c8 = st.columns(2)
+        returns_reserve_pct = c7.number_input("Returns/refunds reserve (%)", min_value=0.0, max_value=100.0, value=5.0, step=1.0)
+        tax_other_cost = c8.number_input("Tax and other cost per order (₹)", min_value=0.0, value=50.0, step=10.0)
+        calculate_clicked = st.form_submit_button("Calculate estimated profit", type="primary")
+
+    if calculate_clicked:
+        fee_amount = selling_price * platform_fee_pct / 100
+        returns_reserve = selling_price * returns_reserve_pct / 100
+        total_cost = supplier_cost + inbound_shipping + packaging_cost + fee_amount + ad_cost + returns_reserve + tax_other_cost
+        profit = selling_price - total_cost
+        margin = (profit / selling_price * 100) if selling_price > 0 else None
+        st.session_state["profit_result"] = {
+            "product_name": product_name,
+            "selling_price_inr": round(selling_price, 2),
+            "supplier_cost_inr": round(supplier_cost, 2),
+            "shipping_inr": round(inbound_shipping, 2),
+            "packaging_inr": round(packaging_cost, 2),
+            "platform_fees_inr": round(fee_amount, 2),
+            "ad_cost_inr": round(ad_cost, 2),
+            "returns_reserve_inr": round(returns_reserve, 2),
+            "tax_and_other_cost_inr": round(tax_other_cost, 2),
+            "total_estimated_cost_inr": round(total_cost, 2),
+            "estimated_profit_per_order_inr": round(profit, 2),
+            "estimated_margin_percent": round(margin, 2) if margin is not None else None,
+            "values_are_user_estimates": True,
+        }
+
+    profit_result = st.session_state.get("profit_result")
+    if profit_result:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Estimated cost per order", f"₹{profit_result['total_estimated_cost_inr']:,.2f}")
+        m2.metric("Estimated profit per order", f"₹{profit_result['estimated_profit_per_order_inr']:,.2f}")
+        m3.metric("Estimated margin", f"{profit_result['estimated_margin_percent']:.1f}%" if profit_result["estimated_margin_percent"] is not None else "Unavailable")
+        if profit_result["estimated_profit_per_order_inr"] < 0:
+            st.error("These assumptions show a loss per order. Check selling price and every cost before proceeding.")
+        else:
+            st.caption("Positive estimated profit does not guarantee real profit. Verify supplier quality, shipping, taxes, platform fees, advertising, refunds, and other costs.")
+        profit_df = pd.DataFrame([profit_result])
+        st.dataframe(profit_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download profit estimate as CSV",
+            data=profit_df.to_csv(index=False).encode("utf-8"),
+            file_name="supplier_cost_profit_estimate.csv",
+            mime="text/csv",
+        )
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
