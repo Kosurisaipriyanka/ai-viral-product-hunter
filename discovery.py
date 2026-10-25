@@ -24,18 +24,18 @@ def fetch_google_trends(keywords: list[str], geo: str = "IN") -> dict[str, Any]:
     try:
         from pytrends.request import TrendReq
 
-        # pytrends expects a single numeric timeout, not a requests-style tuple.
         client = TrendReq(hl="en-IN", tz=330, timeout=15, retries=1, backoff_factor=0.2)
         client.build_payload(cleaned, timeframe="today 3-m", geo=geo)
         frame = client.interest_over_time()
     except Exception as exc:
+        # Include the exception message so we can diagnose the real cause locally.
         return {
             "source": "Google Trends",
             "geo": geo,
             "timeframe": "today 3-m",
             "items": [],
-            "error": "Google Trends could not be reached. It may be rate-limiting requests; try again later.",
-            "detail": type(exc).__name__,
+            "error": "Google Trends request failed. It may be a connection issue, API change, or rate limit.",
+            "detail": f"{type(exc).__name__}: {str(exc)[:300]}",
         }
 
     if frame.empty:
