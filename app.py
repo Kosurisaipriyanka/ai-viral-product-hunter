@@ -6,6 +6,7 @@ import streamlit as st
 from product_decisions import recommend_product, rank_product_comparisons
 from automated_discovery import discover_candidates, NICHE_CANDIDATES
 from research_history import save_research_run, list_research_runs, delete_research_run, clear_research_history
+from research_exports import create_excel_report, create_pdf_report
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -13,7 +14,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -29,6 +30,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Product comparison",
         "Automated discovery",
         "Research history",
+        "Export reports",
     ]
 )
 
@@ -1048,3 +1050,49 @@ with tab_history:
             delete_research_run(selected_id)
             st.success("Deleted the selected saved run.")
             st.rerun()
+
+
+with tab_exports:
+    st.subheader("Professional research reports")
+    st.write("Export a saved research run as an Excel workbook or a shareable PDF report.")
+    st.caption("Reports contain the saved run's data and limitations. Scores remain screening heuristics, not proof of sales or guaranteed profit.")
+    export_runs = list_research_runs(limit=100)
+    if not export_runs:
+        st.info("No saved runs available yet. First save a run from Research Agent or Automated discovery.")
+    else:
+        export_id = st.selectbox(
+            "Choose a saved research run",
+            options=[run["id"] for run in export_runs],
+            format_func=lambda value: next(
+                f"#{run['id']} · {run['run_type']} · {run['title']} · {run['created_at']}"
+                for run in export_runs if run["id"] == value
+            ),
+            key="export_report_run_id",
+        )
+        export_run = next(run for run in export_runs if run["id"] == export_id)
+        st.write(f"**Selected:** {export_run['title']} · {export_run['run_type']}")
+        left, right = st.columns(2)
+        safe_filename = "".join(ch.lower() if ch.isalnum() else "_" for ch in export_run["title"]).strip("_") or "research_report"
+        with left:
+            try:
+                excel_bytes = create_excel_report(export_run)
+                st.download_button(
+                    "Download Excel report (.xlsx)",
+                    data=excel_bytes,
+                    file_name=f"{safe_filename}_research.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                )
+            except Exception:
+                st.error("Excel report could not be generated. Check that report dependencies are installed.")
+        with right:
+            try:
+                pdf_bytes = create_pdf_report(export_run)
+                st.download_button(
+                    "Download PDF report",
+                    data=pdf_bytes,
+                    file_name=f"{safe_filename}_research.pdf",
+                    mime="application/pdf",
+                )
+            except Exception:
+                st.error("PDF report could not be generated. Check that report dependencies are installed.")
