@@ -139,3 +139,29 @@ def research_report(
             "Missing data is left unavailable rather than fabricated."
         ],
     }
+
+
+@app.get("/agent/research")
+def agent_research(
+    query: str = Query(default="portable blender", min_length=1, max_length=100),
+    region_code: str = Query(default="IN", min_length=2, max_length=2),
+    max_results: int = Query(default=10, ge=1, le=25),
+    selling_price: float = Query(default=0, ge=0, le=10000000),
+    supplier_cost: float = Query(default=0, ge=0, le=10000000),
+    shipping_cost: float = Query(default=0, ge=0, le=10000000),
+    other_costs: float = Query(default=0, ge=0, le=10000000),
+    supplier_notes: str = Query(default="", max_length=1000),
+):
+    """Run the guided multi-tool product research workflow with optional LLM review."""
+    from agent_research import run_product_research_agent
+
+    return run_product_research_agent(
+        query=query,
+        region_code=region_code,
+        max_results=max_results,
+        selling_price=selling_price,
+        supplier_cost=supplier_cost,
+        shipping_cost=shipping_cost,
+        other_costs=other_costs,
+        supplier_notes=supplier_notes,
+    )
