@@ -134,3 +134,38 @@ def calculate_opportunity_score(
         "evidence_gaps": gaps,
         "method_note": "Heuristic screening score, not a validated sales or virality prediction. Trend interest is normalized; video views are attention, not purchases.",
     }
+
+
+
+def rank_product_comparisons(products):
+    """Score and rank user-entered product evidence for side-by-side comparison."""
+    ranked = []
+    for product in products:
+        name = str(product.get("product_name", "")).strip()
+        if not name:
+            continue
+        result = calculate_opportunity_score(
+            trends_interest=product.get("trends_interest"),
+            relevant_video_count=product.get("relevant_video_count", 0),
+            total_video_count=product.get("total_video_count", 0),
+            top_relevant_views=product.get("top_relevant_views"),
+            margin_percent=product.get("margin_percent"),
+            supplier_verified=bool(product.get("supplier_verified", False)),
+        )
+        ranked.append({
+            "product_name": name,
+            "opportunity_score": result["score"],
+            "signal": result["label"],
+            "trend_interest": product.get("trends_interest"),
+            "relevant_videos": product.get("relevant_video_count", 0),
+            "videos_checked": product.get("total_video_count", 0),
+            "top_relevant_views": product.get("top_relevant_views"),
+            "estimated_margin_percent": product.get("margin_percent"),
+            "supplier_verified": bool(product.get("supplier_verified", False)),
+            "evidence_gaps": " ".join(result["evidence_gaps"]) or "No configured evidence gaps",
+            "score_method": result["method_note"],
+        })
+    ranked.sort(key=lambda item: item["opportunity_score"], reverse=True)
+    for index, product in enumerate(ranked, start=1):
+        product["rank"] = index
+    return ranked
