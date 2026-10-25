@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from product_decisions import recommend_product
+from product_decisions import recommend_product, rank_product_comparisons
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -11,7 +11,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -24,6 +24,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Supplier comparison",
         "Product research report",
         "Research Agent",
+        "Product comparison",
     ]
 )
 
@@ -864,3 +865,70 @@ with tab_agent:
             file_name="ai_product_research_agent.json",
             mime="application/json",
         )
+
+
+
+with tab_compare:
+    st.subheader("Product comparison and ranking")
+    st.write("Compare up to three product ideas using the same transparent opportunity-score heuristic.")
+    st.warning(
+        "Enter evidence for each product from your research. Trends are indexed interest, views are attention rather than sales, "
+        "and supplier verification is your own assessment—not an automated supplier check."
+    )
+    candidates = []
+    with st.form("product_comparison_form"):
+        for number in range(1, 4):
+            with st.expander(f"Product {number}", expanded=(number == 1)):
+                product_name = st.text_input("Product name", value=["Portable blender", "Pet hair remover", "Travel organizer"][number - 1], key=f"compare_name_{number}")
+                c1, c2, c3 = st.columns(3)
+                trends_interest = c1.number_input("Google Trends interest (0–100)", min_value=0, max_value=100, value=0, key=f"compare_trends_{number}")
+                relevant_videos = c2.number_input("HIGH/MEDIUM relevant videos", min_value=0, max_value=25, value=0, key=f"compare_relevant_{number}")
+                total_videos = c3.number_input("Total videos checked", min_value=0, max_value=25, value=0, key=f"compare_total_{number}")
+                c4, c5, c6 = st.columns(3)
+                top_views = c4.number_input("Top relevant video views", min_value=0, value=0, step=1000, key=f"compare_views_{number}")
+                margin = c5.number_input("Estimated margin (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0, key=f"compare_margin_{number}")
+                supplier_verified = c6.checkbox("Supplier listing checked", value=False, key=f"compare_supplier_{number}")
+                candidates.append({
+                    "product_name": product_name,
+                    "trends_interest": trends_interest if trends_interest > 0 else None,
+                    "relevant_video_count": relevant_videos,
+                    "total_video_count": total_videos,
+                    "top_relevant_views": top_views if top_views > 0 else None,
+                    "margin_percent": margin if margin > 0 else None,
+                    "supplier_verified": supplier_verified,
+                })
+        compare_clicked = st.form_submit_button("Rank Products", type="primary")
+
+    if compare_clicked:
+        ranked_products = rank_product_comparisons(candidates)
+        st.session_state["ranked_product_comparison"] = ranked_products
+
+    ranked_products = st.session_state.get("ranked_product_comparison")
+    if ranked_products:
+        comparison_df = pd.DataFrame(ranked_products)
+        display_columns = [
+            "rank", "product_name", "opportunity_score", "signal", "trend_interest",
+            "relevant_videos", "videos_checked", "top_relevant_views",
+            "estimated_margin_percent", "supplier_verified", "evidence_gaps",
+        ]
+        st.markdown("### Ranked shortlist")
+        st.dataframe(
+            comparison_df[display_columns],
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "opportunity_score": st.column_config.ProgressColumn("Opportunity score", min_value=0, max_value=100, format="%d/100"),
+                "trend_interest": st.column_config.NumberColumn("Trends index", format="%d"),
+                "top_relevant_views": st.column_config.NumberColumn("Top relevant views", format="%d"),
+                "estimated_margin_percent": st.column_config.NumberColumn("Estimated margin", format="%.1f%%"),
+                "supplier_verified": st.column_config.CheckboxColumn("Supplier checked"),
+            },
+        )
+        st.download_button(
+            "Download ranked shortlist as CSV",
+            data=comparison_df.to_csv(index=False).encode("utf-8"),
+            file_name="ranked_product_comparison.csv",
+            mime="text/csv",
+        )
+        st.caption("Rankings are only as reliable as the values entered. Scores are screening heuristics, not predictions of sales, profit, or virality.")
