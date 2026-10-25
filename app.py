@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 import streamlit as st
 
+from product_decisions import recommend_product
+
 API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layout="wide")
@@ -646,37 +648,15 @@ with tab_research_export:
         estimated_profit = report_selling_price - total_cost
         estimated_margin = estimated_profit / report_selling_price * 100 if report_selling_price > 0 else None
 
-        reasons = []
-        if report_selling_price <= 0:
-            decision = "HIGH RISK"
-            reasons.append("Selling price must be greater than zero.")
-        elif estimated_profit < 0:
-            decision = "HIGH RISK"
-            reasons.append("Estimated profit is negative using the entered costs.")
-        else:
-            missing = []
-            if report_supplier_cost <= 0:
-                missing.append("verify supplier item cost")
-            if report_shipping <= 0:
-                missing.append("verify shipping cost (enter 0 only if genuinely free)")
-            if report_trends_interest <= 0:
-                missing.append("collect usable Google Trends data")
-            if report_youtube_views <= 0:
-                missing.append("collect relevant YouTube view data")
-            if not report_supplier_name.strip():
-                missing.append("record and verify the supplier")
-            if estimated_margin is None or estimated_margin < 20:
-                missing.append("review the low or unavailable estimated margin")
-
-            if missing:
-                decision = "NEEDS MORE RESEARCH"
-                reasons.extend("Need to " + item + "." for item in missing)
-            elif report_trends_interest >= 50 and report_youtube_views >= 100000 and estimated_margin >= 30:
-                decision = "PROMISING SIGNAL"
-                reasons.append("Entered Trends, YouTube, and margin values meet the screening thresholds.")
-            else:
-                decision = "NEEDS MORE RESEARCH"
-                reasons.append("The entered metrics do not meet all promising-signal thresholds.")
+        decision_result = recommend_product(
+            selling_price=report_selling_price,
+            total_cost=total_cost,
+            trends_interest=report_trends_interest,
+            youtube_views=report_youtube_views,
+            supplier_name=report_supplier_name,
+        )
+        decision = decision_result["decision"]
+        reasons = decision_result["reasons"]
 
         research_report = pd.DataFrame([{
             "product_name": report_product_name,
