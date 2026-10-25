@@ -44,6 +44,8 @@ def _llm_review(query, region_code, trend_item, video_items, financials, supplie
                 "likes": item.get("likes"),
                 "comments": item.get("comments"),
                 "url": item.get("url"),
+                "relevance_score": item.get("relevance_score"),
+                "relevance_label": item.get("relevance_label"),
             }
             for item in video_items[:10]
         ],
@@ -132,7 +134,14 @@ def run_product_research_agent(
         None,
     )
     video_items = videos.get("items", [])
-    views = [item.get("views") for item in video_items if isinstance(item.get("views"), (int, float))]
+    relevant_video_items = [item for item in video_items if item.get("relevance_label") in ("HIGH", "MEDIUM")]
+    views = [item.get("views") for item in relevant_video_items if isinstance(item.get("views"), (int, float))]
+    relevance_summary = {
+        "high": sum(item.get("relevance_label") == "HIGH" for item in video_items),
+        "medium": sum(item.get("relevance_label") == "MEDIUM" for item in video_items),
+        "low": sum(item.get("relevance_label") == "LOW" for item in video_items),
+        "scored": sum("relevance_label" in item for item in video_items),
+    }
     latest_interest = trend_item.get("latest_interest") if trend_item else None
     top_views = max(views) if views else None
     total_cost = float(supplier_cost) + float(shipping_cost) + float(other_costs)
@@ -199,9 +208,12 @@ def run_product_research_agent(
         "trend": trend_item,
         "youtube": {
             "count": len(video_items),
+            "relevant_count": len(relevant_video_items),
+            "relevance_summary": relevance_summary,
             "top_video_views": top_views,
             "average_views": round(sum(views) / len(views)) if views else None,
             "items": video_items,
+            "relevant_items": relevant_video_items,
         },
         "financials": financials,
         "decision": decision,
