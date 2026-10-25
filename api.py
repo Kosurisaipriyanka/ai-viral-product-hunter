@@ -4,6 +4,7 @@ from fastapi import FastAPI, Query
 from catalog import search_public_catalog
 from discovery import fetch_google_trends
 from scoring import score_trend_items
+from youtube_discovery import search_youtube_videos
 
 app = FastAPI(title="AI Viral Product Hunter API", version="0.4.0")
 
@@ -63,3 +64,12 @@ def get_catalog(
 ):
     """Search a public mock catalog to develop listing workflows without API keys."""
     return search_public_catalog(query=query, limit=limit)
+
+@app.get("/youtube/search")
+def youtube_search(
+    query: str = Query(default="viral products", min_length=1, max_length=100),
+    max_results: int = Query(default=10, ge=1, le=25),
+    region_code: str = Query(default="US", min_length=2, max_length=2),
+):
+    """Search YouTube video metadata through the official Data API."""
+    return search_youtube_videos(query=query, max_results=max_results, region_code=region_code.upper())
