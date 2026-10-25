@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local research history database
+research_history.sqlite3
+research_history.sqlite3-journal
