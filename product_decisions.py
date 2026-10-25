@@ -62,3 +62,75 @@ def recommend_product(
             "Research signals do not meet all promising-signal thresholds."
         ],
     }
+
+
+
+def calculate_opportunity_score(
+    trends_interest=None,
+    relevant_video_count=0,
+    total_video_count=0,
+    top_relevant_views=None,
+    margin_percent=None,
+    supplier_verified=False,
+):
+    """Return a transparent 0-100 screening score plus component breakdown.
+
+    This heuristic prioritizes indexed interest, relevant video evidence,
+    attention among relevant videos, estimated margin, and supplier verification.
+    It is not a prediction of sales or virality.
+    """
+    def bounded(value, low=0, high=100):
+        return max(low, min(high, float(value)))
+
+    trend_points = bounded(trends_interest or 0) * 0.25
+    if total_video_count > 0:
+        relevance_rate = bounded((relevant_video_count / total_video_count) * 100)
+    else:
+        relevance_rate = 0
+    relevance_points = relevance_rate * 0.25
+
+    if top_relevant_views is None or top_relevant_views <= 0:
+        views_strength = 0
+    else:
+        # Log-like tiers avoid allowing one enormous video to dominate the score.
+        views_strength = min(100, (float(top_relevant_views) / 100_000) ** 0.5 * 50)
+    views_points = views_strength * 0.15
+
+    margin_strength = bounded((margin_percent or 0) / 40 * 100)
+    margin_points = margin_strength * 0.25
+    supplier_points = 10 if supplier_verified else 0
+
+    components = {
+        "trend_interest": round(trend_points, 1),
+        "video_relevance": round(relevance_points, 1),
+        "relevant_video_views": round(views_points, 1),
+        "estimated_margin": round(margin_points, 1),
+        "supplier_verification": round(supplier_points, 1),
+    }
+    score = round(sum(components.values()))
+    gaps = []
+    if trends_interest is None:
+        gaps.append("Google Trends interest is unavailable.")
+    if total_video_count == 0:
+        gaps.append("No YouTube videos were returned.")
+    elif relevant_video_count == 0:
+        gaps.append("No videos were classified as HIGH or MEDIUM relevance.")
+    if margin_percent is None:
+        gaps.append("Profit margin is unavailable until selling price and costs are entered.")
+    if not supplier_verified:
+        gaps.append("Supplier listing, product match, shipping, and reliability are not verified.")
+
+    if score >= 75 and not gaps:
+        label = "STRONGER OPPORTUNITY SIGNAL"
+    elif score >= 50:
+        label = "MIXED OPPORTUNITY SIGNAL"
+    else:
+        label = "WEAK OR INCOMPLETE SIGNAL"
+
+    return {
+        "score": score,
+        "label": label,
+        "components": components,
+        "evidence_gaps": gaps,
+        "method_note": "Heuristic screening score, not a validated sales or virality prediction. Trend interest is normalized; video views are attention, not purchases.",
+    }

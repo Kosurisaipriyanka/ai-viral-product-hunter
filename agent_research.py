@@ -14,6 +14,7 @@ load_dotenv()
 
 from discovery import fetch_google_trends
 from youtube_discovery import search_youtube_videos
+from product_decisions import calculate_opportunity_score
 
 
 def _llm_review(query, region_code, trend_item, video_items, financials, supplier_notes):
@@ -179,6 +180,15 @@ def run_product_research_agent(
         decision = "NEEDS MORE RESEARCH"
         decision_reasons = ["The evidence does not meet every starter threshold for a promising signal."]
 
+    opportunity_score = calculate_opportunity_score(
+        trends_interest=latest_interest,
+        relevant_video_count=len(relevant_video_items),
+        total_video_count=len(video_items),
+        top_relevant_views=top_views,
+        margin_percent=margin,
+        supplier_verified=bool(supplier_notes.strip() and float(supplier_cost) > 0),
+    )
+
     ai_review = _llm_review(cleaned_query, region, trend_item, video_items, financials, supplier_notes)
     evidence_gaps = []
     if trend_item is None:
@@ -216,6 +226,7 @@ def run_product_research_agent(
             "relevant_items": relevant_video_items,
         },
         "financials": financials,
+        "opportunity_score": opportunity_score,
         "decision": decision,
         "decision_reasons": decision_reasons,
         "ai_review": ai_review,

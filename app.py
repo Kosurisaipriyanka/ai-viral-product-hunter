@@ -787,6 +787,22 @@ with tab_agent:
         if financials.get("estimated_margin_percent") is not None:
             st.caption(f"Estimated margin: {financials['estimated_margin_percent']}% based only on entered costs.")
 
+        opportunity = agent_result.get("opportunity_score", {})
+        if opportunity:
+            st.markdown("### Product opportunity score")
+            st.metric("Screening score (out of 100)", opportunity.get("score", 0), help=opportunity.get("method_note", ""))
+            st.write(f"**{opportunity.get('label', 'Unrated')}**")
+            components = opportunity.get("components", {})
+            if components:
+                st.dataframe(
+                    pd.DataFrame([{"Signal": key.replace("_", " ").title(), "Points": value} for key, value in components.items()]),
+                    hide_index=True,
+                    width="stretch",
+                )
+            st.caption(opportunity.get("method_note", ""))
+            for gap in opportunity.get("evidence_gaps", []):
+                st.write(f"- Evidence gap: {gap}")
+
         ai_review = agent_result.get("ai_review", {})
         st.markdown("### AI review")
         if ai_review.get("available"):
