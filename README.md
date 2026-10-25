@@ -26,7 +26,8 @@ Features
   user; supplier quotes are not automatically verified.
 - Product research report: combine research inputs, display a
   transparent decision category, and export a CSV report.
-- Product comparison and ranking: compare up to three manually researched products, rank by the transparent opportunity score, review evidence gaps, and export CSV.\n- Guided Research Agent: orchestrate Google Trends and YouTube research,
+- Product comparison and ranking: compare up to three manually researched products, rank by the transparent opportunity score, review evidence gaps, and export CSV.
+- Automated product discovery: research curated candidate ideas by niche using Google Trends and YouTube public metadata, rank candidates, and export a CSV shortlist. Candidate ideas are not live marketplace discoveries.\n- Guided Research Agent: orchestrate Google Trends and YouTube research,
   review evidence gaps, estimate entered costs, and provide supplier search links.
 - Optional LLM review: configure an OpenAI-compatible chat-completions API
   to summarize strengths, risks, evidence gaps, and suggested next steps.
