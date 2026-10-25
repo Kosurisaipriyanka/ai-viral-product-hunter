@@ -4,6 +4,7 @@ import requests
 import streamlit as st
 
 from product_decisions import recommend_product, rank_product_comparisons
+from automated_discovery import discover_candidates, NICHE_CANDIDATES
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -11,7 +12,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -25,6 +26,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Product research report",
         "Research Agent",
         "Product comparison",
+        "Automated discovery",
     ]
 )
 
@@ -932,3 +934,50 @@ with tab_compare:
             mime="text/csv",
         )
         st.caption("Rankings are only as reliable as the values entered. Scores are screening heuristics, not predictions of sales, profit, or virality.")
+
+
+
+with tab_discovery:
+    st.subheader("Automated product discovery")
+    st.write("Choose a niche to research curated product ideas using Google Trends and public YouTube metadata.")
+    st.info("This workflow automates research across a curated list; it does not scrape marketplaces or verify product sales.")
+    with st.form("automated_discovery_form"):
+        niche = st.selectbox("Product niche", options=list(NICHE_CANDIDATES.keys()))
+        region = st.selectbox("Market", options=["IN", "US", "GB", "CA", "AU"], index=0)
+        count = st.slider("Candidate ideas to research", min_value=1, max_value=5, value=5)
+        run_discovery = st.form_submit_button("Discover and rank ideas", type="primary")
+    if run_discovery:
+        with st.spinner("Checking trend signals and YouTube videos for each candidate…"):
+            try:
+                st.session_state["automated_discovery_result"] = discover_candidates(niche, region, count)
+            except Exception as exc:
+                st.session_state["automated_discovery_result"] = None
+                st.error("Discovery could not complete. Google Trends or YouTube may be temporarily unavailable.")
+                st.caption(type(exc).__name__)
+    discovery_result = st.session_state.get("automated_discovery_result")
+    if discovery_result:
+        if discovery_result.get("error"):
+            st.warning(discovery_result["error"])
+        else:
+            discovered = discovery_result.get("items", [])
+            if discovered:
+                discovery_df = pd.DataFrame(discovered)
+                st.markdown("### Ranked candidate ideas")
+                st.dataframe(
+                    discovery_df,
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "rank": st.column_config.NumberColumn("Rank", format="%d"),
+                        "opportunity_score": st.column_config.ProgressColumn("Screening score", min_value=0, max_value=100, format="%d/100"),
+                        "trends_interest": st.column_config.NumberColumn("Trends index", format="%d"),
+                        "top_relevant_views": st.column_config.NumberColumn("Top relevant views", format="%d"),
+                    },
+                )
+                st.download_button(
+                    "Download discovery shortlist as CSV",
+                    data=discovery_df.to_csv(index=False).encode("utf-8"),
+                    file_name="automated_product_discovery.csv",
+                    mime="text/csv",
+                )
+            st.caption(discovery_result.get("note", ""))
