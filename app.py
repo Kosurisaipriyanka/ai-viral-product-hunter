@@ -9,6 +9,7 @@ from research_history import save_research_run, list_research_runs, delete_resea
 from research_exports import create_excel_report, create_pdf_report
 from marketplace_research import build_marketplace_search_links
 from marketplace_evidence import save_marketplace_evidence, list_marketplace_evidence, delete_marketplace_evidence
+from competitor_analysis import summarize_competitor_prices, estimate_competitor_margin
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -16,7 +17,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation, tab_marketplaces = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation, tab_marketplaces, tab_competitors = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -35,6 +36,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Export reports",
         "Profitability & validation",
         "Marketplace research",
+        "Competitor price analysis",
     ]
 )
 
@@ -1251,3 +1253,55 @@ with tab_marketplaces:
             )
         else:
             st.info("No listings recorded yet. Open a search link, inspect a listing, and record only details you verified.")
+
+
+with tab_competitors:
+    st.subheader("Competitor price analysis")
+    st.write("Compare prices from listings you manually recorded in Marketplace research.")
+    st.caption("This dashboard summarizes saved entries only. It does not fetch live prices or establish demand.")
+    competitor_rows = list_marketplace_evidence()
+    if not competitor_rows:
+        st.info("No saved listing evidence yet. Add listings in the Marketplace research tab first.")
+    else:
+        summaries = summarize_competitor_prices(competitor_rows)
+        if summaries:
+            summary_df = pd.DataFrame(summaries)
+            st.dataframe(
+                summary_df,
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "lowest_price_inr": st.column_config.NumberColumn("Lowest price (₹)", format="₹%.2f"),
+                    "median_price_inr": st.column_config.NumberColumn("Median price (₹)", format="₹%.2f"),
+                    "highest_price_inr": st.column_config.NumberColumn("Highest price (₹)", format="₹%.2f"),
+                },
+            )
+            st.download_button(
+                "Download competitor price summary (CSV)",
+                data=summary_df.to_csv(index=False).encode("utf-8"),
+                file_name="competitor_price_summary.csv",
+                mime="text/csv",
+            )
+            st.markdown("### Estimate a product's unit economics")
+            product_options = [item["product_keyword"] for item in summaries]
+            selected_product = st.selectbox("Product keyword", options=product_options, key="competitor_margin_keyword")
+            p1, p2, p3, p4 = st.columns(4)
+            with p1:
+                planned_price = st.number_input("Your selling price (₹)", min_value=0.0, value=1499.0, step=50.0)
+            with p2:
+                planned_supplier_cost = st.number_input("Supplier cost (₹)", min_value=0.0, value=600.0, step=50.0)
+            with p3:
+                planned_shipping = st.number_input("Shipping (₹)", min_value=0.0, value=100.0, step=10.0)
+            with p4:
+                planned_other_costs = st.number_input("Fees, ads & other costs (₹)", min_value=0.0, value=250.0, step=25.0)
+            unit = estimate_competitor_margin(planned_price, planned_supplier_cost, planned_shipping, planned_other_costs)
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Estimated total cost", f"₹{unit['total_cost_inr']:,.2f}")
+            m2.metric("Estimated profit", "N/A" if unit["estimated_profit_inr"] is None else f"₹{unit['estimated_profit_inr']:,.2f}")
+            m3.metric("Estimated margin", "N/A" if unit["estimated_margin_percent"] is None else f"{unit['estimated_margin_percent']:.1f}%")
+            selected_summary = next(item for item in summaries if item["product_keyword"] == selected_product)
+            if selected_summary["median_price_inr"] is not None and planned_price > selected_summary["median_price_inr"]:
+                st.warning("Your planned selling price is above the median of the manually recorded listings. Compare product quality, shipping, and features before deciding.")
+            elif selected_summary["median_price_inr"] is not None:
+                st.info("Your planned selling price is at or below the median of the manually recorded listings. This alone does not establish competitiveness or demand.")
+            st.caption("Treat prices as snapshots. Recheck listing availability, shipping, product match, and supplier quotes before purchasing.")
