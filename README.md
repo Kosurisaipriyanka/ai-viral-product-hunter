@@ -121,3 +121,10 @@ Suggested final verification
 Repository hygiene
 Keep API keys, .env, .venv, caches, and generated local files out of
 Git. Review .gitignore before pushing.
+
+
+Research report exports
+- Export saved Research Agent or Automated Discovery runs as Excel workbooks (.xlsx) with Summary and Results sheets.
+- Generate a PDF report with run metadata, a summary, candidate evidence where available, and clear interpretation limitations.
+- Reports use locally saved research history. Save a research run first to make it available for export.
+- Exported reports summarize the recorded evidence and do not independently verify sales, supplier offers, or profitability.
