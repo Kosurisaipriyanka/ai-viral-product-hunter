@@ -2,6 +2,7 @@
 import pandas as pd
 import requests
 import streamlit as st
+import os
 
 from product_decisions import recommend_product, rank_product_comparisons
 from automated_discovery import discover_candidates, NICHE_CANDIDATES
@@ -11,7 +12,7 @@ from marketplace_research import build_marketplace_search_links
 from marketplace_evidence import save_marketplace_evidence, list_marketplace_evidence, delete_marketplace_evidence
 from competitor_analysis import summarize_competitor_prices, estimate_competitor_margin
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layout="wide")
 st.title("🔎 AI Viral Product Hunter")
