@@ -128,3 +128,14 @@ Research report exports
 - Generate a PDF report with run metadata, a summary, candidate evidence where available, and clear interpretation limitations.
 - Reports use locally saved research history. Save a research run first to make it available for export.
 - Exported reports summarize the recorded evidence and do not independently verify sales, supplier offers, or profitability.
+
+Deployment (Render)
+- The repository includes a `render.yaml` blueprint for separate FastAPI and Streamlit web services.
+- In Render, create a new Blueprint deployment from this repository and review the two services before deploying.
+- After the API service is deployed, copy its public HTTPS URL and set `API_URL` on the dashboard service to that URL. Redeploy the dashboard after saving the variable.
+- Confirm the API health endpoint at `https://YOUR-API-HOST/health` and API docs at `https://YOUR-API-HOST/docs`.
+- Configure `YOUTUBE_API_KEY` and any optional LLM credentials in the appropriate service's secret environment settings. Do not put secrets in Git.
+- Render's local filesystem may be ephemeral depending on service/plan. The current SQLite research history and marketplace evidence are local-file based; they are not a shared durable database. For multi-user production use, migrate these records to a managed database before relying on persistence.
+- External Google Trends and YouTube calls may be rate-limited. Verify the app manually after deployment.
+
+Local development still defaults to `http://127.0.0.1:8000`. Set the `API_URL` environment variable when the dashboard and API are hosted separately.
