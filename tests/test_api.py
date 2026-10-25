@@ -32,3 +32,11 @@ def test_unknown_category_returns_empty_list():
     response = client.get("/products", params={"category": "Not a category"})
     assert response.status_code == 200
     assert response.json()["products"] == []
+
+
+def test_trends_endpoint_handles_empty_keywords_without_network_call():
+    response = client.get("/trends", params={"keywords": ""})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "Google Trends"
+    assert body["items"] == []
