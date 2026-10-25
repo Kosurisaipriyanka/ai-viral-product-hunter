@@ -1,9 +1,10 @@
-"""FastAPI backend for sample products and optional live discovery signals."""
+"""FastAPI backend for sample products and discovery signals."""
 from fastapi import FastAPI, Query
 
+from catalog import search_public_catalog
 from discovery import fetch_google_trends
 
-app = FastAPI(title="AI Viral Product Hunter API", version="0.2.0")
+app = FastAPI(title="AI Viral Product Hunter API", version="0.3.0")
 
 SAMPLE_PRODUCTS = [
     {"name": "Reusable Pet Hair Remover", "category": "Pet Gadgets", "viral_score": 82, "estimated_retail_price_inr": 599, "estimated_supplier_cost_inr": 180, "source": "Sample data", "notes": "Easy-to-demonstrate household pet accessory"},
@@ -36,3 +37,11 @@ def get_trends(
     """Return Google Trends interest signals for comma-separated keywords."""
     keyword_list = [keyword.strip() for keyword in keywords.split(",")]
     return fetch_google_trends(keyword_list, geo=geo.upper())
+
+@app.get("/catalog")
+def get_catalog(
+    query: str = Query(default="organizer", min_length=1, max_length=100),
+    limit: int = Query(default=10, ge=1, le=30),
+):
+    """Search a public mock catalog to develop listing workflows without API keys."""
+    return search_public_catalog(query=query, limit=limit)
