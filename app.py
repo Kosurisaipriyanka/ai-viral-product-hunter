@@ -9,8 +9,8 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score"]
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery"]
 )
 
 with tab_demo:
