@@ -5,6 +5,7 @@ import streamlit as st
 
 from product_decisions import recommend_product, rank_product_comparisons
 from automated_discovery import discover_candidates, NICHE_CANDIDATES
+from research_history import save_research_run, list_research_runs, delete_research_run, clear_research_history
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -12,7 +13,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -27,6 +28,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Research Agent",
         "Product comparison",
         "Automated discovery",
+        "Research history",
     ]
 )
 
@@ -868,6 +870,14 @@ with tab_agent:
             mime="application/json",
         )
 
+        if st.button("Save this agent run to local history", key="save_agent_history"):
+            saved_id = save_research_run(
+                "research_agent",
+                str(agent_result.get("query") or "Research Agent run"),
+                agent_result,
+            )
+            st.success(f"Saved locally to research history (ID {saved_id}).")
+
 
 
 with tab_compare:
@@ -980,4 +990,61 @@ with tab_discovery:
                     file_name="automated_product_discovery.csv",
                     mime="text/csv",
                 )
+            if discovered and st.button("Save this discovery run to local history", key="save_discovery_history"):
+                saved_id = save_research_run(
+                    "automated_discovery",
+                    str(discovery_result.get("niche") or niche),
+                    discovery_result,
+                )
+                st.success(f"Saved locally to research history (ID {saved_id}).")
             st.caption(discovery_result.get("note", ""))
+
+
+with tab_history:
+    st.subheader("Saved research history")
+    st.write("Review previous Research Agent and Automated Discovery runs saved in a local SQLite database on this computer.")
+    st.caption("History is local to this machine. It is not synced to GitHub or another computer.")
+    history_col1, history_col2 = st.columns(2)
+    with history_col1:
+        if st.button("Refresh history", key="refresh_research_history"):
+            st.rerun()
+    with history_col2:
+        if st.button("Clear all saved history", key="clear_research_history"):
+            removed = clear_research_history()
+            st.success(f"Deleted {removed} saved run(s).")
+            st.rerun()
+
+    history_runs = list_research_runs(limit=100)
+    if not history_runs:
+        st.info("No saved runs yet. Use the save button after completing a Research Agent or Automated Discovery workflow.")
+    else:
+        history_rows = [
+            {
+                "ID": run["id"],
+                "Type": run["run_type"],
+                "Title": run["title"],
+                "Saved at (UTC)": run["created_at"],
+            }
+            for run in history_runs
+        ]
+        st.dataframe(pd.DataFrame(history_rows), hide_index=True, width="stretch")
+        selected_id = st.selectbox(
+            "Choose a saved run to inspect",
+            options=[run["id"] for run in history_runs],
+            format_func=lambda value: next(
+                f"#{run['id']} · {run['run_type']} · {run['title']} · {run['created_at']}"
+                for run in history_runs if run["id"] == value
+            ),
+        )
+        selected_run = next(run for run in history_runs if run["id"] == selected_id)
+        st.json(selected_run["payload"])
+        st.download_button(
+            "Download selected saved run as JSON",
+            data=__import__("json").dumps(selected_run, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name=f"research_history_{selected_id}.json",
+            mime="application/json",
+        )
+        if st.button("Delete selected run", key="delete_selected_research_run"):
+            delete_research_run(selected_id)
+            st.success("Deleted the selected saved run.")
+            st.rerun()
