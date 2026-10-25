@@ -5,6 +5,7 @@ from catalog import search_public_catalog
 from discovery import fetch_google_trends
 from scoring import score_trend_items
 from youtube_discovery import search_youtube_videos
+from product_filter import screen_video_candidates
 
 app = FastAPI(title="AI Viral Product Hunter API", version="0.4.0")
 
@@ -73,3 +74,18 @@ def youtube_search(
 ):
     """Search YouTube video metadata through the official Data API."""
     return search_youtube_videos(query=query, max_results=max_results, region_code=region_code.upper())
+
+@app.get("/youtube/shortlist")
+def youtube_shortlist(
+    query: str = Query(default="useful home gadgets", min_length=1, max_length=100),
+    max_results: int = Query(default=10, ge=1, le=25),
+    region_code: str = Query(default="US", min_length=2, max_length=2),
+):
+    """Search YouTube and rank videos with a transparent keyword-based screening heuristic."""
+    response = search_youtube_videos(query=query, max_results=max_results, region_code=region_code.upper())
+    response["items"] = screen_video_candidates(response.get("items", []))
+    response["screening_method"] = {
+        "formula": "20 points for each of five keyword signals: demonstration, problem-solving, emotional hook, bundle potential, and evergreen category",
+        "warning": "This is a first-pass keyword screen, not an AI judgment or a prediction of sales or virality. Video metadata may not describe the product accurately.",
+    }
+    return response
