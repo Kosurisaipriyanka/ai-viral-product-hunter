@@ -9,8 +9,19 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist", "Combined research", "Profit calculator"]
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export = st.tabs(
+    [
+        "Sample candidates",
+        "Public demo catalog",
+        "Google Trends",
+        "Opportunity score",
+        "YouTube discovery",
+        "Product shortlist",
+        "Combined research",
+        "Profit calculator",
+        "Supplier comparison",
+        "Product research report",
+    ]
 )
 
 with tab_demo:
@@ -39,7 +50,7 @@ with tab_demo:
         m1.metric("Products", len(df))
         m2.metric("Average sample score", f"{df['viral_score'].mean():.0f}/100")
         m3.metric("Average estimated retail price", f"₹{df['estimated_retail_price_inr'].mean():,.0f}")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
         st.download_button("Download sample results as CSV", data=df.to_csv(index=False).encode("utf-8"),
                            file_name="sample_product_candidates.csv", mime="text/csv")
     else:
@@ -77,7 +88,7 @@ with tab_catalog:
         elif catalog_result["products"]:
             catalog_df = pd.DataFrame(catalog_result["products"])
             st.write(f"Found {catalog_result['count']} demo product(s).")
-            st.dataframe(catalog_df, use_container_width=True, hide_index=True)
+            st.dataframe(catalog_df, width="stretch", hide_index=True)
             st.download_button(
                 "Download catalog results as CSV",
                 data=catalog_df.to_csv(index=False).encode("utf-8"),
@@ -122,7 +133,7 @@ with tab_trends:
             st.error(f"Google Trends request failed: {trends_result['error']}")
         elif trends_result.get("items"):
             trends_df = pd.DataFrame(trends_result["items"])
-            st.dataframe(trends_df, use_container_width=True, hide_index=True)
+            st.dataframe(trends_df, width="stretch", hide_index=True)
             st.download_button(
                 "Download Trends results as CSV",
                 data=trends_df.to_csv(index=False).encode("utf-8"),
@@ -166,7 +177,7 @@ with tab_score:
             st.error(f"Google Trends request failed: {opportunity_result['error']}")
         elif opportunity_result.get("items"):
             score_df = pd.DataFrame(opportunity_result["items"])
-            st.dataframe(score_df, use_container_width=True, hide_index=True)
+            st.dataframe(score_df, width="stretch", hide_index=True)
             st.download_button(
                 "Download opportunity scores as CSV",
                 data=score_df.to_csv(index=False).encode("utf-8"),
@@ -215,7 +226,7 @@ with tab_youtube:
             st.write(f"Found {youtube_result['count']} video(s) for **{youtube_result['query']}**.")
             st.dataframe(
                 youtube_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "url": st.column_config.LinkColumn("YouTube link"),
@@ -269,7 +280,7 @@ with tab_shortlist:
             shortlist_df = pd.DataFrame(shortlist_result["items"])
             st.dataframe(
                 shortlist_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "url": st.column_config.LinkColumn("YouTube link"),
@@ -336,7 +347,7 @@ with tab_report:
             report_df = pd.DataFrame(youtube["items"])
             st.dataframe(
                 report_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "url": st.column_config.LinkColumn("YouTube link"),
@@ -418,7 +429,7 @@ with tab_profit:
         else:
             st.caption("Positive estimated profit does not guarantee real profit. Verify supplier quality, shipping, taxes, platform fees, advertising, refunds, and other costs.")
         profit_df = pd.DataFrame([profit_result])
-        st.dataframe(profit_df, use_container_width=True, hide_index=True)
+        st.dataframe(profit_df, width="stretch", hide_index=True)
         st.download_button(
             "Download profit estimate as CSV",
             data=profit_df.to_csv(index=False).encode("utf-8"),
@@ -426,5 +437,317 @@ with tab_profit:
             mime="text/csv",
         )
 
-st.divider()
+with tab_supplier:
+    st.subheader("Supplier Price Comparison")
+    st.write("Compare supplier quotes and estimate which option has the lowest cost.")
+    st.info(
+        "Enter prices from supplier quotes you have checked. "
+        "These values are not fetched or verified automatically."
+    )
+
+    comparison_product_name = st.text_input(
+        "Product name",
+        value="Portable blender",
+        key="comparison_product_name",
+    )
+    comparison_selling_price = st.number_input(
+        "Expected selling price per unit (₹)",
+        min_value=0.0,
+        value=1499.0,
+        step=50.0,
+        key="comparison_selling_price",
+    )
+
+    supplier_data = pd.DataFrame(
+        [
+            {
+                "Supplier": "Supplier A",
+                "Item cost (₹)": 450.0,
+                "Shipping (₹)": 100.0,
+                "Minimum order quantity": 1,
+                "Supplier link / notes": "",
+            },
+            {
+                "Supplier": "Supplier B",
+                "Item cost (₹)": 0.0,
+                "Shipping (₹)": 0.0,
+                "Minimum order quantity": 1,
+                "Supplier link / notes": "",
+            },
+            {
+                "Supplier": "Supplier C",
+                "Item cost (₹)": 0.0,
+                "Shipping (₹)": 0.0,
+                "Minimum order quantity": 1,
+                "Supplier link / notes": "",
+            },
+        ]
+    )
+
+    edited_suppliers = st.data_editor(
+        supplier_data,
+        num_rows="dynamic",
+        hide_index=True,
+        key="supplier_comparison_editor",
+        column_config={
+            "Item cost (₹)": st.column_config.NumberColumn(min_value=0.0, step=10.0),
+            "Shipping (₹)": st.column_config.NumberColumn(min_value=0.0, step=10.0),
+            "Minimum order quantity": st.column_config.NumberColumn(min_value=1, step=1),
+            "Supplier link / notes": st.column_config.TextColumn(
+                help="Paste a supplier quote URL or notes you have verified."
+            ),
+        },
+    )
+
+    if st.button("Compare supplier prices", type="primary", key="compare_supplier_prices"):
+        results = edited_suppliers.copy()
+        results["Product"] = comparison_product_name
+        results["Item cost (₹)"] = pd.to_numeric(results["Item cost (₹)"], errors="coerce").fillna(0)
+        results["Shipping (₹)"] = pd.to_numeric(results["Shipping (₹)"], errors="coerce").fillna(0)
+        results["Total cost per unit (₹)"] = results["Item cost (₹)"] + results["Shipping (₹)"]
+        results["Estimated gross profit (₹)"] = comparison_selling_price - results["Total cost per unit (₹)"]
+        results["Estimated gross margin (%)"] = results["Estimated gross profit (₹)"].apply(
+            lambda profit: round(profit / comparison_selling_price * 100, 2)
+            if comparison_selling_price > 0
+            else None
+        )
+        results = results[
+            (results["Supplier"].astype(str).str.strip() != "")
+            & (results["Item cost (₹)"] > 0)
+        ].sort_values("Total cost per unit (₹)")
+        st.session_state["supplier_comparison_results"] = results
+
+    if "supplier_comparison_results" in st.session_state:
+        results = st.session_state["supplier_comparison_results"]
+        if results.empty:
+            st.warning("Enter at least one supplier name and a positive item cost, then compare again.")
+        else:
+            st.dataframe(results, hide_index=True, width="stretch")
+            best = results.iloc[0]
+            st.metric(
+                "Lowest entered cost per unit",
+                f"₹{best['Total cost per unit (₹)']:,.2f}",
+            )
+            st.caption(
+                "Gross profit here subtracts only item cost and entered shipping. It excludes platform fees, "
+                "advertising, packaging, returns, taxes, and other costs. Use the Profit calculator for a fuller estimate."
+            )
+            st.download_button(
+                "Download supplier comparison CSV",
+                data=results.to_csv(index=False).encode("utf-8"),
+                file_name="supplier_price_comparison.csv",
+                mime="text/csv",
+            )
+
+
+with tab_research_export:
+    st.subheader("Product Research Report")
+    st.write(
+        "Combine saved Google Trends, YouTube, supplier comparison, "
+        "and profit calculator results into one downloadable report."
+    )
+
+    # Reuse results already collected in this Streamlit session.
+    trend_result = st.session_state.get("trends_result") or {}
+    youtube_result = st.session_state.get("youtube_result") or {}
+    supplier_result = st.session_state.get("supplier_comparison_results")
+    profit_result = st.session_state.get("profit_result") or {}
+
+    # Extract latest available Trends interest.
+    trends_interest = None
+    trend_items = trend_result.get("items", [])
+    if trend_items:
+        trend_df = pd.DataFrame(trend_items)
+        possible_columns = [
+            "latest_interest",
+            "latest_value",
+            "current_interest",
+            "interest",
+        ]
+        for column in possible_columns:
+            if column in trend_df.columns:
+                values = pd.to_numeric(
+                    trend_df[column], errors="coerce"
+                ).dropna()
+                if not values.empty:
+                    trends_interest = float(values.iloc[0])
+                    break
+
+    # Extract the highest view count from YouTube results.
+    youtube_items = youtube_result.get("items", [])
+    top_views = None
+    if youtube_items:
+        views = pd.to_numeric(
+            pd.DataFrame(youtube_items).get(
+                "views", pd.Series(dtype=float)
+            ),
+            errors="coerce",
+        ).dropna()
+        if not views.empty:
+            top_views = int(views.max())
+
+    # Reuse the supplier comparison, if available.
+    supplier_name = None
+    supplier_cost = None
+    supplier_shipping = None
+    if isinstance(supplier_result, pd.DataFrame) and not supplier_result.empty:
+        first_supplier = supplier_result.iloc[0]
+        supplier_name = first_supplier.get("Supplier")
+        supplier_cost = first_supplier.get("Item cost (₹)")
+        supplier_shipping = first_supplier.get("Shipping (₹)")
+
+    # Reuse the profit calculator result, if available.
+    product_default = (
+        profit_result.get("product_name")
+        or "Portable blender"
+    )
+    selling_default = float(
+        profit_result.get("selling_price_inr", 1499.0)
+    )
+
+    st.markdown("**Automatically found session results**")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(
+        "Trends interest",
+        f"{trends_interest:g}" if trends_interest is not None else "Not found",
+    )
+    c2.metric(
+        "Top YouTube views",
+        f"{top_views:,}" if top_views is not None else "Not found",
+    )
+    c3.metric(
+        "Supplier quote",
+        supplier_name or "Not found",
+    )
+    c4.metric(
+        "Profit estimate",
+        (
+            f"₹{profit_result['estimated_profit_per_order_inr']:,.2f}"
+            if profit_result.get("estimated_profit_per_order_inr") is not None
+            else "Not found"
+        ),
+    )
+
+    st.caption(
+        "These values come from saved results in the current Streamlit session. "
+        "Run the relevant research tabs first. Results may not refer to the same product."
+    )
+
+    with st.form("product_research_export_form"):
+        report_product_name = st.text_input(
+            "Product name",
+            value=product_default,
+        )
+        report_trends_interest = st.number_input(
+            "Google Trends interest (0–100; 0 if unavailable)",
+            min_value=0,
+            max_value=100,
+            value=max(
+                0,
+                min(100, int(trends_interest))
+                if trends_interest is not None else 0,
+            ),
+        )
+        report_youtube_views = st.number_input(
+            "Top relevant YouTube views (0 if unavailable)",
+            min_value=0,
+            value=top_views or 0,
+            step=1000,
+        )
+        report_supplier_name = st.text_input(
+            "Supplier name",
+            value=str(supplier_name or ""),
+        )
+        report_supplier_cost = st.number_input(
+            "Supplier item cost (₹)",
+            min_value=0.0,
+            value=float(supplier_cost)
+            if supplier_cost is not None else 0.0,
+        )
+        report_shipping = st.number_input(
+            "Shipping per unit (₹)",
+            min_value=0.0,
+            value=float(supplier_shipping)
+            if supplier_shipping is not None else 0.0,
+        )
+        report_selling_price = st.number_input(
+            "Expected selling price (₹)",
+            min_value=0.0,
+            value=selling_default,
+        )
+        report_other_costs = st.number_input(
+            "Other costs per order (₹)",
+            min_value=0.0,
+            value=max(
+                0.0,
+                float(profit_result.get("platform_fees_inr", 0))
+                + float(profit_result.get("packaging_inr", 0))
+                + float(profit_result.get("ad_cost_inr", 0))
+                + float(profit_result.get("returns_reserve_inr", 0))
+                + float(profit_result.get("tax_and_other_cost_inr", 0)),
+            ),
+            help="Include platform fees, packaging, advertising, returns, taxes, and other costs.",
+        )
+        report_notes = st.text_area(
+            "Research notes",
+            placeholder="Record product quality, competition, supplier links, and verification notes.",
+        )
+        create_report = st.form_submit_button(
+            "Generate Product Research Report",
+            type="primary",
+        )
+
+    if create_report:
+        total_cost = (
+            report_supplier_cost
+            + report_shipping
+            + report_other_costs
+        )
+        estimated_profit = report_selling_price - total_cost
+        estimated_margin = (
+            estimated_profit / report_selling_price * 100
+            if report_selling_price > 0 else None
+        )
+
+        research_report = pd.DataFrame([{
+            "product_name": report_product_name,
+            "google_trends_interest_0_100": report_trends_interest,
+            "top_youtube_views": report_youtube_views,
+            "supplier_name": report_supplier_name,
+            "supplier_item_cost_inr": report_supplier_cost,
+            "shipping_per_unit_inr": report_shipping,
+            "selling_price_inr": report_selling_price,
+            "other_costs_per_order_inr": report_other_costs,
+            "total_estimated_cost_inr": round(total_cost, 2),
+            "estimated_profit_per_order_inr": round(estimated_profit, 2),
+            "estimated_margin_percent": (
+                round(estimated_margin, 2)
+                if estimated_margin is not None else None
+            ),
+            "research_notes": report_notes,
+            "data_status": "Mixed saved results and user-entered values; verify before use",
+        }])
+
+        st.session_state["product_research_report"] = research_report
+
+    research_report = st.session_state.get("product_research_report")
+    if research_report is not None:
+        st.dataframe(
+            research_report,
+            hide_index=True,
+            width="stretch",
+        )
+        st.download_button(
+            "Download Product Research Report CSV",
+            data=research_report.to_csv(index=False).encode("utf-8"),
+            file_name="product_research_report.csv",
+            mime="text/csv",
+        )
+
+    st.caption(
+        "This is a research aid, not a sales or profit prediction. "
+        "Confirm that the Trends, YouTube, and supplier results refer to the same product. "
+        "Zero values may mean data was unavailable, not that demand or cost is zero."
+    )
+
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
