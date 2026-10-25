@@ -9,8 +9,8 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist = st.tabs(
-    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist"]
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report = st.tabs(
+    ["Sample candidates", "Public demo catalog", "Google Trends", "Opportunity score", "YouTube discovery", "Product shortlist", "Combined research"]
 )
 
 with tab_demo:
@@ -291,6 +291,80 @@ with tab_shortlist:
         st.caption(f"Screening method: {method.get('formula', 'Not available')}")
         st.caption(method.get("warning", ""))
         st.caption(shortlist_result.get("note", ""))
+
+with tab_report:
+    st.subheader("Combined product research report")
+    st.write("Compare Google Trends search interest with YouTube video attention for one product keyword.")
+    st.warning("The combined score is an experimental research signal—not proof of demand, sales, profit, or virality. Google Trends may be unavailable or rate-limited.")
+    with st.form("combined_research_form"):
+        report_query = st.text_input("Product keyword", value="portable blender", max_chars=100)
+        report_region = st.selectbox("Market / region", ["IN", "US", "GB", "CA", "AU"], index=0, key="report_region")
+        report_limit = st.slider("YouTube videos to retrieve", min_value=1, max_value=25, value=10, key="report_limit")
+        report_clicked = st.form_submit_button("Build Combined Report", type="primary")
+
+    if report_clicked:
+        if not report_query.strip():
+            st.error("Enter a product keyword.")
+        else:
+            try:
+                response = requests.get(
+                    f"{API_URL}/research/report",
+                    params={"query": report_query.strip(), "region_code": report_region, "max_results": report_limit},
+                    timeout=60,
+                )
+                response.raise_for_status()
+                st.session_state["combined_report"] = response.json()
+            except requests.RequestException:
+                st.session_state["combined_report"] = None
+                st.error("Could not reach the combined research API. Check that the backend is running.")
+
+    combined_report = st.session_state.get("combined_report")
+    if combined_report:
+        trend = combined_report.get("trend") or {}
+        youtube = combined_report.get("youtube") or {}
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Latest Trends interest", trend.get("latest_interest", "Unavailable"))
+        col2.metric("Top YouTube video views", f"{youtube['top_video_views']:,}" if youtube.get("top_video_views") is not None else "Unavailable")
+        col3.metric("Combined research score", f"{combined_report['combined_research_score']}/100" if combined_report.get("combined_research_score") is not None else "Unavailable")
+        if trend.get("change_percent") is not None:
+            st.write(f"Recent Trends change: **{trend['change_percent']}%**")
+        elif not trend:
+            st.info("Google Trends did not return usable data for this keyword. The combined score is unavailable unless both sources provide data.")
+        if youtube.get("error"):
+            st.warning(youtube["error"])
+        if youtube.get("items"):
+            report_df = pd.DataFrame(youtube["items"])
+            st.dataframe(
+                report_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "url": st.column_config.LinkColumn("YouTube link"),
+                    "thumbnail": st.column_config.ImageColumn("Thumbnail"),
+                    "views": st.column_config.NumberColumn("Views", format="%d"),
+                    "likes": st.column_config.NumberColumn("Likes", format="%d"),
+                    "comments": st.column_config.NumberColumn("Comments", format="%d"),
+                },
+            )
+            export_df = pd.DataFrame([{
+                "query": combined_report.get("query"),
+                "region_code": combined_report.get("region_code"),
+                "latest_trends_interest": trend.get("latest_interest"),
+                "previous_trends_interest": trend.get("previous_interest"),
+                "trends_change_percent": trend.get("change_percent"),
+                "top_video_views": youtube.get("top_video_views"),
+                "average_video_views": youtube.get("average_views"),
+                "combined_research_score": combined_report.get("combined_research_score"),
+                "score_method": combined_report.get("score_method"),
+            }])
+            st.download_button(
+                "Download combined research summary as CSV",
+                data=export_df.to_csv(index=False).encode("utf-8"),
+                file_name="combined_product_research.csv",
+                mime="text/csv",
+            )
+        for warning in combined_report.get("warnings", []):
+            st.caption(warning)
 
 st.divider()
 st.caption("Product trend signals and authorized live marketplace data are separate integrations. Never interpret demo records as verified market evidence.")
