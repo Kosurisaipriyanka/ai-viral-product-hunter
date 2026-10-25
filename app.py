@@ -14,7 +14,7 @@ st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layou
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
 
-tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports = st.tabs(
+tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation = st.tabs(
     [
         "Sample candidates",
         "Public demo catalog",
@@ -31,6 +31,7 @@ tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_re
         "Automated discovery",
         "Research history",
         "Export reports",
+        "Profitability & validation",
     ]
 )
 
@@ -1050,6 +1051,84 @@ with tab_history:
             delete_research_run(selected_id)
             st.success("Deleted the selected saved run.")
             st.rerun()
+
+
+with tab_validation:
+    st.subheader("Profitability & product validation")
+    st.write("Estimate per-order economics and identify evidence gaps before spending money.")
+    st.info("Use real supplier quotes and realistic fees. This calculator does not verify demand, supplier claims, or sales.")
+    v1, v2, v3 = st.columns(3)
+    with v1:
+        selling_price = st.number_input("Selling price (₹)", min_value=0.0, value=1499.0, step=50.0, key="validation_selling_price")
+        supplier_cost = st.number_input("Supplier/product cost (₹)", min_value=0.0, value=600.0, step=25.0, key="validation_supplier_cost")
+    with v2:
+        shipping_cost = st.number_input("Shipping & fulfilment (₹)", min_value=0.0, value=100.0, step=10.0, key="validation_shipping_cost")
+        platform_fees = st.number_input("Marketplace/payment fees (₹)", min_value=0.0, value=100.0, step=10.0, key="validation_platform_fees")
+    with v3:
+        advertising_cost = st.number_input("Advertising per order (₹)", min_value=0.0, value=100.0, step=10.0, key="validation_advertising_cost")
+        other_costs = st.number_input("Packaging, returns & other costs (₹)", min_value=0.0, value=150.0, step=10.0, key="validation_other_costs")
+
+    total_cost = supplier_cost + shipping_cost + platform_fees + advertising_cost + other_costs
+    estimated_profit = selling_price - total_cost
+    margin = (estimated_profit / selling_price * 100) if selling_price > 0 else None
+    break_even = total_cost
+    target_margin = st.slider("Target profit margin (%)", min_value=5, max_value=60, value=25, step=5)
+    target_price = total_cost / (1 - target_margin / 100) if target_margin < 100 else 0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total estimated cost", f"₹{total_cost:,.2f}")
+    m2.metric("Profit per order", f"₹{estimated_profit:,.2f}", delta=None)
+    m3.metric("Profit margin", "N/A" if margin is None else f"{margin:.1f}%")
+    m4.metric("Price for target margin", f"₹{target_price:,.2f}")
+    if selling_price <= 0:
+        st.error("Enter a selling price greater than ₹0 to calculate a margin.")
+    elif estimated_profit <= 0:
+        st.error("LOSS / NO PROFIT: estimated costs meet or exceed the selling price.")
+    elif margin is not None and margin < target_margin:
+        st.warning(f"Positive estimated profit, but margin is below your {target_margin}% target.")
+    else:
+        st.success(f"Estimated unit economics meet the {target_margin}% target margin. Verify all inputs before relying on this estimate.")
+
+    st.markdown("### Validation checklist")
+    checks = [
+        ("Demand evidence checked beyond views/trend index", "validation_demand"),
+        ("At least 3 competing listings and their prices reviewed", "validation_competitors"),
+        ("Supplier identity and recent reviews checked", "validation_supplier"),
+        ("Sample product quality and product match verified", "validation_sample"),
+        ("Shipping time, fees, return policy and stock confirmed", "validation_shipping"),
+        ("Ad cost and expected return/defect costs estimated", "validation_ads"),
+    ]
+    completed = 0
+    for label, key in checks:
+        if st.checkbox(label, key=key):
+            completed += 1
+    st.progress(completed / len(checks), text=f"Validation completeness: {completed}/{len(checks)} checks")
+    if completed < len(checks):
+        st.warning("Not ready for a confident launch decision. Finish the remaining checks and keep supplier/demand claims marked unverified.")
+    else:
+        st.success("Checklist complete. This is not a guarantee of demand or profit; use a small test before scaling.")
+
+    validation_summary = pd.DataFrame([{
+        "selling_price_inr": selling_price,
+        "supplier_cost_inr": supplier_cost,
+        "shipping_cost_inr": shipping_cost,
+        "platform_fees_inr": platform_fees,
+        "advertising_cost_inr": advertising_cost,
+        "other_costs_inr": other_costs,
+        "total_cost_inr": total_cost,
+        "estimated_profit_per_order_inr": estimated_profit,
+        "estimated_margin_percent": margin,
+        "target_margin_percent": target_margin,
+        "price_for_target_margin_inr": target_price,
+        "validation_checks_completed": completed,
+        "validation_checks_total": len(checks),
+    }])
+    st.download_button(
+        "Download profitability & validation summary (CSV)",
+        data=validation_summary.to_csv(index=False).encode("utf-8"),
+        file_name="profitability_validation_summary.csv",
+        mime="text/csv",
+    )
 
 
 with tab_exports:
