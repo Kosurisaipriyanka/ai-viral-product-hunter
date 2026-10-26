@@ -919,7 +919,7 @@ with tab_agent:
                 str(agent_result.get("query") or "Research Agent run"),
                 agent_result,
             )
-            st.success(f"Saved locally to research history (ID {saved_id}).")
+            st.success(f"Saved to research history (ID {saved_id}).")
 
 
 
@@ -1033,7 +1033,7 @@ with tab_discovery:
                     file_name="automated_product_discovery.csv",
                     mime="text/csv",
                 )
-            if discovered and st.button("Save this discovery run to local history", key="save_discovery_history"):
+            if discovered and st.button("Save this discovery run to history", key="save_discovery_history"):
                 saved_id = save_research_run(
                     "automated_discovery",
                     str(discovery_result.get("niche") or niche),
@@ -1045,8 +1045,12 @@ with tab_discovery:
 
 with tab_history:
     st.subheader("Saved research history")
-    st.write("Review previous Research Agent and Automated Discovery runs saved in a local SQLite database on this computer.")
-    st.caption("History is local to this machine. It is not synced to GitHub or another computer.")
+    if os.getenv("DATABASE_URL", "").strip():
+        st.write("Review previous Research Agent and Automated Discovery runs saved in your configured Supabase PostgreSQL database.")
+        st.caption("History is stored in Supabase and can persist across app restarts. Keep your database credentials private.")
+    else:
+        st.write("Review previous Research Agent and Automated Discovery runs saved in a local SQLite database.")
+        st.caption("Without DATABASE_URL configured, history is local to this app instance and may not persist across cloud restarts.")
     history_col1, history_col2 = st.columns(2)
     with history_col1:
         if st.button("Refresh history", key="refresh_research_history"):
@@ -1267,12 +1271,12 @@ with tab_marketplaces:
                 }
                 try:
                     evidence_id = save_marketplace_evidence(evidence_item)
-                    st.success(f"Evidence saved locally (ID {evidence_id}).")
+                    st.success(f"Evidence saved (ID {evidence_id}).")
                 except (ValueError, OSError) as exc:
                     st.error(f"Could not save evidence: {exc}")
         evidence_rows = list_marketplace_evidence()
         if evidence_rows:
-            st.caption("Saved evidence persists in the local SQLite database on this computer.")
+            st.caption("Saved evidence is stored in Supabase when DATABASE_URL is configured; otherwise it uses local SQLite.")
             evidence_df = pd.DataFrame(evidence_rows)
             st.dataframe(evidence_df, hide_index=True, width="stretch")
             selected_evidence_id = st.selectbox("Saved evidence ID to delete", options=[row["id"] for row in evidence_rows], key="marketplace_evidence_delete_id")
