@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 import os
+import hmac
 import socket
 import threading
 import time
@@ -51,6 +52,33 @@ if not os.getenv("API_URL"):
 st.set_page_config(page_title="AI Viral Product Hunter", page_icon="🔎", layout="wide")
 st.title("🔎 AI Viral Product Hunter")
 st.caption("Explore product ideas using clearly labelled demo data and Google Trends signals.")
+
+# Destructive actions are disabled until an administrator configures ADMIN_PASSWORD
+# in Streamlit Secrets and successfully authenticates in this browser session.
+def is_admin_authenticated() -> bool:
+    return bool(st.session_state.get("admin_authenticated", False))
+
+with st.sidebar:
+    st.subheader("Administrator access")
+    configured_admin_password = str(st.secrets.get("ADMIN_PASSWORD", "")).strip()
+    if not configured_admin_password:
+        st.warning("Admin password is not configured. Destructive actions are disabled.")
+    elif is_admin_authenticated():
+        st.success("Administrator access enabled for this session.")
+        if st.button("Log out administrator", key="admin_logout"):
+            st.session_state["admin_authenticated"] = False
+            st.rerun()
+    else:
+        with st.form("admin_login_form"):
+            entered_admin_password = st.text_input("Admin password", type="password", max_chars=256)
+            login_submitted = st.form_submit_button("Unlock admin actions")
+        if login_submitted:
+            if hmac.compare_digest(entered_admin_password, configured_admin_password):
+                st.session_state["admin_authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Incorrect admin password.")
+
 
 tab_demo, tab_catalog, tab_trends, tab_score, tab_youtube, tab_shortlist, tab_report, tab_profit, tab_supplier, tab_research_export, tab_agent, tab_compare, tab_discovery, tab_history, tab_exports, tab_validation, tab_marketplaces, tab_competitors = st.tabs(
     [
@@ -1056,10 +1084,13 @@ with tab_history:
         if st.button("Refresh history", key="refresh_research_history"):
             st.rerun()
     with history_col2:
-        if st.button("Clear all saved history", key="clear_research_history"):
-            removed = clear_research_history()
-            st.success(f"Deleted {removed} saved run(s).")
-            st.rerun()
+        if is_admin_authenticated():
+            if st.button("Clear all saved history", key="clear_research_history"):
+                removed = clear_research_history()
+                st.success(f"Deleted {removed} saved run(s).")
+                st.rerun()
+        else:
+            st.button("Clear all saved history (admin only)", disabled=True, key="clear_research_history_locked")
 
     history_runs = list_research_runs(limit=100)
     if not history_runs:
@@ -1091,10 +1122,13 @@ with tab_history:
             file_name=f"research_history_{selected_id}.json",
             mime="application/json",
         )
-        if st.button("Delete selected run", key="delete_selected_research_run"):
-            delete_research_run(selected_id)
-            st.success("Deleted the selected saved run.")
-            st.rerun()
+        if is_admin_authenticated():
+            if st.button("Delete selected run", key="delete_selected_research_run"):
+                delete_research_run(selected_id)
+                st.success("Deleted the selected saved run.")
+                st.rerun()
+        else:
+            st.button("Delete selected run (admin only)", disabled=True, key="delete_selected_research_run_locked")
 
 
 with tab_validation:
@@ -1280,10 +1314,13 @@ with tab_marketplaces:
             evidence_df = pd.DataFrame(evidence_rows)
             st.dataframe(evidence_df, hide_index=True, width="stretch")
             selected_evidence_id = st.selectbox("Saved evidence ID to delete", options=[row["id"] for row in evidence_rows], key="marketplace_evidence_delete_id")
-            if st.button("Delete selected evidence", key="delete_marketplace_evidence"):
-                delete_marketplace_evidence(selected_evidence_id)
-                st.success("Saved evidence deleted.")
-                st.rerun()
+            if is_admin_authenticated():
+                if st.button("Delete selected evidence", key="delete_marketplace_evidence"):
+                    delete_marketplace_evidence(selected_evidence_id)
+                    st.success("Saved evidence deleted.")
+                    st.rerun()
+            else:
+                st.button("Delete selected evidence (admin only)", disabled=True, key="delete_marketplace_evidence_locked")
             st.download_button(
                 "Download marketplace evidence worksheet (CSV)",
                 data=evidence_df.to_csv(index=False).encode("utf-8"),
