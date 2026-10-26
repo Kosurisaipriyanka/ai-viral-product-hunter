@@ -19,6 +19,7 @@ dependencies = [
   "urllib3>=1.26,<2.0",
   "openpyxl>=3.1,<4.0",
   "reportlab>=4.0,<5.0",
+  "psycopg[binary]>=3.2,<4.0",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +29,7 @@ dev = ["pytest>=8.0,<9.0", "httpx>=0.27,<1.0"]
 "*" = ["*.txt"]
 
 [tool.setuptools]
-py-modules = ["api", "app", "discovery", "catalog", "scoring", "youtube_discovery", "product_filter", "product_decisions", "agent_research", "automated_discovery", "research_history", "research_exports", "marketplace_research", "marketplace_evidence", "competitor_analysis"]
+py-modules = ["api", "app", "discovery", "catalog", "scoring", "youtube_discovery", "product_filter", "product_decisions", "agent_research", "automated_discovery", "research_history", "research_exports", "marketplace_research", "marketplace_evidence", "competitor_analysis", "database_storage"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
